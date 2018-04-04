@@ -1,4 +1,5 @@
 from asyncio import Semaphore, Lock
+from mra.dynamic_module import DynamicModule
 
 # used to create the semaphore if required by the allocation
 Sema_Lock = Lock()
@@ -6,7 +7,8 @@ Sema_Lock = Lock()
 class ResourcePoolException(Exception):
     pass
 
-class ResourcePool(object):
+class ResourcePool(DynamicModule):
+    PATH = "Resource"
     MAX_ALLOCATION = -1
     RESOURCES = []
     SEMA = None

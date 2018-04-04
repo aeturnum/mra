@@ -1,9 +1,8 @@
 import aiohttp
-from resource_pool import ResourcePool
-
-class 
+from mra.resource_pool import ResourcePool
 
 class HTTPPool(ResourcePool):
+    PATH = "Resource.HTTPPool"
     MAX_ALLOCATION = 10
     COOKIE_JAR = None
 
