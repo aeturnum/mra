@@ -3,23 +3,38 @@ import inspect
 from os.path import split, basename, join
 import os
 import multiprocessing
-import time
+from mra.settings import Settings
 
 # global registry
 Registry = {}
 # Registry_Lock = Lock()
 
 # default location for actions
-_DEFAULT_ACTIONS = (
+_DEFAULT_MODULE_ROOTS = (
     # package directory
     split(__file__)[0],
 )
 
+# todo add testing files
+# don't add this file
+_BANNED_FILES = (
+    __file__,
+)
+
+# Classes that we don't want added
+# todo: find a better way of doing this
+_BANNED_CLASSES = (
+    'dynamic_module.DynamicModule',
+    'action.Action',
+    'resource_pool.ResourcePool'
+)
 
 _DRY_RUN_TIMEOUT = 5
 
 class DynamicModule(object):
     PATH = "Global"
+    SETTINGS_KEYS = []
+    SETTINGS = None
 
     def __init__(self):
         self.settings = {}
@@ -45,14 +60,47 @@ class DynamicModule(object):
 
     @classmethod
     def register(cls):
-        DynamicModule._global_register(cls.PATH, cls.__class__)
+        DynamicModule._global_register(cls.PATH, cls)
+
+    @staticmethod
+    def settings_file_update(settings):
+        """
+
+        :param mra.settings.Settings settings:
+        :return:
+        """
+        global Registry
+        for name, cls in Registry.items():
+            cls.load_settings(settings)
 
     @classmethod
-    def load_settings(self, settings_dict):
-        self.settings = settings_dict.get(self.PATH, None)
+    def load_settings(cls, settings):
+        """
+
+        :param mra.settings.Settings settings:
+        :return:
+        """
+        cls.SETTINGS = settings.get(cls.PATH, Settings())
+
+    @staticmethod
+    def _reset_registry():
+        """
+        Debug method for resetting the registry
+        :return:
+        """
+        global Registry
+        Registry = {}
 
     @staticmethod
     def _gather_file(path, test_process=False):
+        """
+
+        :param str path: Path to python file
+        :param bool test_process:  If true, this is hosted in a separate process and should not load modules
+        :return:
+        """
+        global _BANNED_CLASSES
+
         # this must be called in a thread because if the module exec blocks, it must be killed
         module_name = basename(path).split(".")[0]
 
@@ -72,21 +120,36 @@ class DynamicModule(object):
                 exit(1)
         for name, obj in inspect.getmembers(module):
             if inspect.isclass(obj) and obj.__module__ == module_name and issubclass(obj, DynamicModule):
+                full_name = f'{obj.__module__}.{name}'
                 # this will be called in a process first to ensure the process works
-                if not test_process:
-                    DynamicModule._global_register(obj.PATH, obj)
+                # Also check if this is a base class that won't ever been created
+                # Also check if we've banned this class
+                if not test_process and full_name not in _BANNED_CLASSES:
+                    obj.register()
 
 
 
     @staticmethod
     def gather(settings):
-        # todo: add directory enumeration
-        global _DEFAULT_ACTIONS
-        for action_directory in _DEFAULT_ACTIONS:
+        """
+        Gather all DynamicModules specified by settings
+        :param settings:
+        :return:
+        """
+        # todo: add a paranoid setting, on by default, that will crash if loading something fails
+        global _DEFAULT_MODULE_ROOTS
+        global _BANNED_FILES
+
+        roots = []
+        roots.extend(_DEFAULT_MODULE_ROOTS)
+        roots.extend(settings.get('modules', []))
+        for action_directory in _DEFAULT_MODULE_ROOTS:
             for dir_name, sub_dirs, file_list in os.walk(action_directory):
                 for file_name in file_list:
                     if file_name.endswith(".py"):
                         path = join(dir_name, file_name)
+                        if path in _BANNED_FILES:
+                            continue
                         process = multiprocessing.Process(
                             target=DynamicModule._gather_file,
                             args=(path, True) # dry run
@@ -105,7 +168,6 @@ class DynamicModule(object):
                                 DynamicModule._gather_file(path)
                             else:
                                 print(f'File {path} has a non-zero exit code, indicating problems. Skipping.')
-                #DynamicModule._gather_file(_DEFAULT_ACTIONS[0])
 
 
 

@@ -4,16 +4,21 @@ from mra.dynamic_module import DynamicModule
 # used to create the semaphore if required by the allocation
 Sema_Lock = Lock()
 
+
 class ResourcePoolException(Exception):
     pass
 
+
 class ResourcePool(DynamicModule):
+    # dynamic module attributes
     PATH = "Resource"
+
     MAX_ALLOCATION = -1
     RESOURCES = []
     SEMA = None
 
     def __init__(self):
+        super().__init__()
         self._resource = None
         self._allocated = False
 
@@ -50,10 +55,10 @@ class ResourcePool(DynamicModule):
             if cls.SEMA is None and cls.MAX_ALLOCATION >= 0:
                 cls.SEMA = Semaphore(cls.MAX_ALLOCATION)
 
-            cls._create_global_values()
+            await cls._create_global_values()
 
     async def _allocate_resource(self, attempt):
-        if (self.SEMA):
+        if self.SEMA:
             if attempt and self.SEMA.locked():
                 raise ResourcePoolException("Semaphore is taken")
             await self.SEMA.acquire()
@@ -61,17 +66,17 @@ class ResourcePool(DynamicModule):
         # true either way
         self._allocated = True
         if len(self.RESOURCES):
-        # return first old resource if we've already created it
+            # return first old resource if we've already created it
             return self.RESOURCES.pop(0)
 
-        return self._create_resource()
+        return await self._create_resource()
 
     # create any global values that all resources share
     @classmethod
-    def _create_global_values(cls):
+    async def _create_global_values(cls):
         pass
 
     # will be called when the semaphore is acquired
     # must be overidden
-    def _create_resource(self):
+    async def _create_resource(self):
         return None
