@@ -48,6 +48,11 @@ class ResourcePool(DynamicModule):
             raise ResourcePoolException("Resource was never acquired!")
         return self._resource
 
+    async def _ensure_resource(self):
+        if not self._allocated:
+            await self.acquire()
+        return self._resource
+
     @classmethod
     async def _create_semaphore(cls):
         global Sema_Lock
