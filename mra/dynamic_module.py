@@ -3,7 +3,9 @@ import inspect
 from os.path import split, basename, join
 import os
 import multiprocessing
+
 from mra.settings import Settings
+from mra.logger import Logger
 
 # global registry
 Registry = {}
@@ -118,12 +120,13 @@ class DynamicModuleManager(object):
                             else:
                                 print(f'File {path} has a non-zero exit code, indicating problems. Skipping.')
 
-class DynamicModule(object):
+class DynamicModule(Logger):
     PATH = "Global"
     SETTINGS_KEYS = []
     SETTINGS = None
 
     def __init__(self):
+        super().__init__()
         self.settings = {}
 
     @staticmethod

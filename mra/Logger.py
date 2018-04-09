@@ -22,27 +22,40 @@ class Logger(object):
         self._depth = 0
         self._logger = getLogger(self._logger_name)
 
-    def _build_final_string(self, log_str:str, *args:list[any]):
-        time_string = datetime.utcnow().strftime('%H:%M:%S.%f')
-        log_str = log_str.format(args)
-        return f'{self._depth * self._depth_character}[{time_string}]{self}::{log_str}'
+    @staticmethod
+    def _dict_to_str(d:dict):
+        l = []
+        for key, value in d.items():
+            if type(value) is dict:
+                value = Logger._dict_to_str(d)
+            if value is None:
+                # note: ths space after the 🇳 is a half space
+                value = '🇳 '
+            l.append(f'{key}:{value}')
+        return ','.join(l)
 
-    def _log(self, level:int, log_str:str, *args:list[any]):
+    def _build_final_string(self, log_str:str, *args):
+        time_string = datetime.utcnow().strftime('%H:%M:%S.%f')
+        log_str = log_str.format(*args)
+        return f'{self._depth * self._depth_character}[{time_string}] {self}::{log_str}'
+
+    def _log(self, level:int, log_str:str, *args):
         log_str = self._build_final_string(log_str, *args)
+        print(log_str)
         if level == self._l0:
             self._logger.debug(log_str)
         if level == self._l1:
-            self._logger.warn(log_str)
+            self._logger.warning(log_str)
         if level == self._l2:
             self._logger.error(log_str)
 
-    def _debug(self, log_str:str, *args:list[any]):
+    def _debug(self, log_str:str, *args):
         self._log(self._l0, log_str, *args)
 
-    def _warn(self, log_str:str, *args:list[any]):
+    def _warn(self, log_str:str, *args):
         self._log(self._l1, log_str, *args)
 
-    def _error(self, log_str:str, *args:list[any]):
+    def _error(self, log_str:str, *args):
         self._log(self._l2, log_str, *args)
 
     def _up(self):
