@@ -1,10 +1,31 @@
 from mra.dynamic_module import DynamicModule
+from mra.durable_state import DurableState
 
-class Task(DynamicModule):
+class Task(DurableState):
     PATH = "Task"
 
     def __init__(self, *actions):
+        super().__init__()
         self.actions = list(actions)
+        self.completed = []
+        self.result = None
+
+    async def setup(self):
+        await self.update({
+           'done': [],
+           'actions': [a.durable_id for a in self.actions]
+        })
+        for a in self.actions:
+            await a.setup()
+        self.result = None
+        await self.current.is_next()
+
+    async def cleanup(self):
+        for a in self.actions:
+            await a.cleanup()
+
+        for a in self.completed:
+            await a.cleanup()
 
     @property
     def current(self):
@@ -21,18 +42,25 @@ class Task(DynamicModule):
         return len(self.actions) == 0
 
     async def advance(self):
-        await self.current.execute()
-        old_action = self.actions.pop(0)
+        await self.current.execute(self.result)
+        self.result = self.current.result
 
-        await old_action.is_done()
+        await self.current.is_done()
 
-        await self.current.is_next()
+        if self.next:
+            await self.next.is_next()
+
+        self.completed.append(self.actions.pop(0))
+        self['done'].append(self['actions'].pop(0))
+        self.update(await self.read())
 
     async def run(self):
-        while not self.done():
+        await self.setup()
+        while not self.done:
             await self.advance()
 
-        return True
+        await self.cleanup()
+        return self.result
 
     def __str__(self):
         return f"Task:\n\tcurrent: {self.current}\n\tnext: {self.next}"

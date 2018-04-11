@@ -19,19 +19,19 @@ class HTTPPool(ResourcePool):
     async def _create_resource(cls):
         return aiohttp.ClientSession(cookie_jar=cls.COOKIE_JAR)
 
-    async def get(self, url, params=None, headers=None):
+    async def get(self, url, params=None, headers=None) -> aiohttp.ClientResponse:
         return await self._request(self._GET, url,
             params=params)
 
-    async def post(self, url, params=None, body=None, headers=None):
+    async def post(self, url, params=None, body=None, headers=None) -> aiohttp.ClientResponse:
         return await self._request(self._POST, url,
             params, body)
 
-    async def post_json(self, url, params=None, body=None, headers=None):
+    async def post_json(self, url, params=None, body=None, headers=None) -> aiohttp.ClientResponse:
         return await self._request(self._POST_JSON, url,
             params, body)
 
-    async def _request(self, method, url, params=None, body=None, headers=None):
+    async def _request(self, method, url, params=None, body=None, headers=None) -> aiohttp.ClientResponse:
 
         if params == None:
             params = {}

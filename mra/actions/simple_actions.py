@@ -8,6 +8,10 @@ class Get(Action):
         super().__init__()
         self.url = url
 
-    async def actions(self):
+    async def actions(self, previous):
         with await HTTPPool().acquire() as pool:
-            print(await pool.get(self.url))
+            result = await pool.get(self.url)
+            if result.content_type == 'application/json':
+                return await result.json()
+
+            return await result.text()

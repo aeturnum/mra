@@ -27,9 +27,9 @@ class Logger(object):
         l = []
         for key, value in d.items():
             if type(value) is dict:
-                value = Logger._dict_to_str(d)
+                value = Logger._dict_to_str(value)
             if value is None:
-                # note: ths space after the 🇳 is a half space
+                # note: ths space after the 🇳 is a half space " "
                 value = '🇳 '
             l.append(f'{key}:{value}')
         return ','.join(l)

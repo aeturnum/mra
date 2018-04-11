@@ -8,8 +8,10 @@ import json
 SQLITE_DATABASE_NAME = 'SQLITE_DATABASE_NAME'
 _DEFAULT_DB_NAME = 'task_state.db'
 
+
 class DBError(Exception):
     pass
+
 
 class DBDict(dict, Logger):
     _create_state_query = 'INSERT INTO states (type, state) VALUES (?, ?)'
@@ -20,16 +22,15 @@ class DBDict(dict, Logger):
     def __init__(self, data, db_id=None):
         dict.__init__(self, data)
         Logger.__init__(self)
-        self._db_id = db_id
+        self.db_id = db_id
         self._loaded = False
 
-    async def _execute(self, db:aiosqlite.Connection, statement:str, args:list=None):
+    async def _execute(self, db: aiosqlite.Connection, statement: str, args: list=None):
         if args is None:
             args = []
 
         self._debug('statement: {}, args: {}', statement, args)
         return await db.execute(statement, args)
-
 
     @property
     def loaded(self) -> bool:
@@ -44,7 +45,7 @@ class DBDict(dict, Logger):
         return self['next']
 
     @next.setter
-    def next(self, value:int):
+    def next(self, value: int):
         self['next'] = value
 
     @property
@@ -52,19 +53,19 @@ class DBDict(dict, Logger):
         return self['prev']
 
     @prev.setter
-    def prev(self, value:int):
+    def prev(self, value: int):
         self['prev'] = value
 
     # returns dbid
-    async def _create(self, db:aiosqlite.Connection) -> int:
+    async def _create(self, db: aiosqlite.Connection) -> int:
         cursor = await self._execute(db, self._create_state_query, [self['type'], self.str_state])
         await db.commit()
-        self._db_id = cursor.lastrowid
+        self.db_id = cursor.lastrowid
         self._loaded = True
-        return self._db_id
+        return self.db_id
 
-    async def _load(self, db:aiosqlite.Connection):
-        cursor = await self._execute(db, self._load_state_query.format(db_id=self._db_id))
+    async def _load(self, db: aiosqlite.Connection) -> None:
+        cursor = await self._execute(db, self._load_state_query.format(db_id=self.db_id))
         if cursor.rowcount != -1:
             print(cursor.rowcount)
             raise DBError("Somehow there's a duplicate row, burn it all down.")
@@ -76,36 +77,37 @@ class DBDict(dict, Logger):
             self[key] = item
         self._loaded = True
 
-    async def _update(self, db: aiosqlite.Connection):
-        await self._execute(db, self._update_state_query.format(db_id=self._db_id), [self.str_state])
+    async def _update(self, db: aiosqlite.Connection) -> None:
+        await self._execute(db, self._update_state_query.format(db_id=self.db_id), [self.str_state])
         await db.commit()
 
-    async def _delete(self, db: aiosqlite.Connection):
-        await self._execute(db,self._delete_state_query.format(db_id=self._db_id))
+    async def _delete(self, db: aiosqlite.Connection) -> None:
+        await self._execute(db, self._delete_state_query.format(db_id=self.db_id))
         await db.commit()
 
-    def copy(self):
-        return DBDict(self, self._db_id)
+    def copy(self) -> 'DBDict':
+        return DBDict(self, self.db_id)
 
-    def dict(self):
+    def dict(self) -> dict:
         return dict(self)
 
     def __str__(self):
-        return 'S|{id}<{items}>'.format(items=self._dict_to_str(self), id=self._db_id)
+        return 'S|{id}<{items}>'.format(items=self._dict_to_str(self), id=self.db_id)
+
 
 class DurableState(DynamicModule):
     PATH = "Resource.SqlitePool.DurableState"
 
-    _state_table_create = f'CREATE TABLE IF NOT EXISTS states (id INTEGER PRIMARY KEY ASC, type INTEGER, state VARCHAR);'
+    _state_table_create = 'CREATE TABLE IF NOT EXISTS states (id INTEGER PRIMARY KEY ASC, type INTEGER, state VARCHAR);'
 
-    def __init__(self, type_id:int, db_id:int=None):
+    def __init__(self, type_id: int=0, db_id: int=None):
         super().__init__()
         self._state = DBDict({'type': type_id, 'previous': None, 'next': None}, db_id)
         self._state_synced = False
 
     @property
     def durable_id(self):
-        return self._state._db_id
+        return self._state.db_id
 
     async def _init_db(self):
         async with aiosqlite.connect(self._db_name()) as db:
@@ -113,7 +115,6 @@ class DurableState(DynamicModule):
             await db.execute(self._state_table_create)
 
         return None
-
 
     async def _load_state(self):
         if self.durable_id is not None:
@@ -143,6 +144,9 @@ class DurableState(DynamicModule):
     def __getitem__(self, key:str) -> any:
         return self._state.get(key, None)
 
+    def get(self, key, default=None):
+        return self._state.get(key, default)
+
     @classmethod
     def _db_name(cls):
         global SQLITE_DATABASE_NAME
@@ -157,6 +161,9 @@ class DurableState(DynamicModule):
     @property
     def db_name(self):
         return self._db_name()
+
+    async def setup(self):
+        await self._barrier()
 
     async def update(self, updates:dict):
         await self._barrier()
@@ -174,7 +181,7 @@ class DurableState(DynamicModule):
             # create new entry
             await self._state._create(db)
             # could also be done though self.durable_id, but that's confusing to read
-            dirty_state.next = self._state._db_id
+            dirty_state.next = self._state.db_id
             await dirty_state._update(db)
 
     async def delete(self):
@@ -186,7 +193,7 @@ class DurableState(DynamicModule):
                 self._debug("prev: {}", state.prev)
                 await state._delete(db)
                 # switch to prev
-                state._db_id = state.prev
+                state.db_id = state.prev
                 # load
                 try:
                     await state._load(db)
