@@ -38,7 +38,6 @@ class ResourcePool(DynamicModule):
 
     def release(self):
         if self.SEMA and self._allocated:
-            print("pool deleted")
             self.RESOURCES.append(self._resource)
             self.SEMA.release()
 

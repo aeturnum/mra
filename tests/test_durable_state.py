@@ -1,20 +1,17 @@
 import unittest
-import asyncio
 from os.path import exists
 from os import unlink
 
+from .base_test import BaseTest
+
 from mra.durable_state import DurableState
 
-class ResourcePoolTest(unittest.TestCase):
+class ResourcePoolTest(BaseTest):
 
     @classmethod
     def setUpClass(cls):
         if exists('./task_state.db'):
             unlink('./task_state.db')
-
-    def async_test(self, func):
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(func())
 
     def test_basic(self):
         async def test():

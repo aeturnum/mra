@@ -29,7 +29,7 @@ class DBDict(dict, Logger):
         if args is None:
             args = []
 
-        self._debug('statement: {}, args: {}', statement, args)
+        self._spew('statement: {}, args: {}', statement, args)
         return await db.execute(statement, args)
 
     @property
@@ -86,7 +86,10 @@ class DBDict(dict, Logger):
         await db.commit()
 
     def copy(self) -> 'DBDict':
-        return DBDict(self, self.db_id)
+        new_dbd = DBDict(self, self.db_id)
+        new_dbd._parent = self._parent
+        new_dbd._children = self._children
+        return new_dbd
 
     def dict(self) -> dict:
         return dict(self)
@@ -103,6 +106,7 @@ class DurableState(DynamicModule):
     def __init__(self, type_id: int=0, db_id: int=None):
         super().__init__()
         self._state = DBDict({'type': type_id, 'previous': None, 'next': None}, db_id)
+        self._adopt(self._state)
         self._state_synced = False
 
     @property
@@ -124,7 +128,6 @@ class DurableState(DynamicModule):
                 self._state_synced = True
 
     async def _create_state(self):
-        self._debug("_create_state")
         if self.durable_id is None:
             await self._init_db()
             async with aiosqlite.connect(self.db_name) as db:
@@ -190,7 +193,6 @@ class DurableState(DynamicModule):
         state = self._state
         async with aiosqlite.connect(self.db_name) as db:
             while state.prev != None:
-                self._debug("prev: {}", state.prev)
                 await state._delete(db)
                 # switch to prev
                 state.db_id = state.prev

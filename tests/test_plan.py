@@ -1,14 +1,19 @@
 import unittest
-from os.path import split, join
 
 from mra.management import Plan
 from mra.task import Task
-from mra.actions.simple_actions import Get
+from mra.actions.simple_actions import Get, DictCheck
 
-class ResourcePoolTest(unittest.TestCase):
+from base_test import BaseTest
+
+class ResourcePoolTest(BaseTest):
     def test_basic(self):
-        p = Plan(Task(Get('http://httpbin.org/get')))
+        p = Plan(Task(
+            Get('http://httpbin.org/get'),
+            DictCheck({'url': 'http://httpbin.org/get', 'args': {}})
+        ))
         result = p.run()
+        print(result)
 
 if __name__ == '__main__':
     unittest.main()

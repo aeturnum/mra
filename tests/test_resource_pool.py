@@ -1,13 +1,10 @@
 import unittest
-import asyncio
 
 from mra.resource_pool import ResourcePool, ResourcePoolException
 
-class ResourcePoolTest(unittest.TestCase):
-    def async_test(self, func):
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(func())
+from base_test import BaseTest
 
+class ResourcePoolTest(BaseTest):
     def test_unlimited(self):
         async def test():
             # reset
