@@ -5,6 +5,9 @@ from mra.durable_state import DurableState
 class Action(DurableState):
     PATH = "Action"
 
+    def __init__(self):
+        super().__init__(0)
+
     async def setup(self):
         await super().setup()
 
@@ -30,15 +33,23 @@ class Action(DurableState):
         setattr(self, '_exception', value)
 
     async def run_segment(self, label, func):
-        if self.exception != None:
-            # stop running actions if we have an exception
-            return
+        self._spew('run_segment({}, {})', label, func)
         loop = asyncio.get_event_loop()
         task = loop.create_task(func)
         await task
+
+        result = task.result()
+        if asyncio.coroutines.iscoroutine(result):
+            self.exception = TypeError(
+                f"Action returned coroutine object. Please add an await to your action's {label} function."
+            )
+            # cancel coro because we don't know how to deal with it
+            loop.create_task(result).cancel()
+            result = None
+
         await self.update({label:{
             'duration': task.cputime if hasattr(task, 'cputime') else 0,
-            'result': task.result(),
+            'result': result,
             # Could save the exception in the state, but I don't think they can be pickled reliably
             # 'exception': task.exception()
         }})
@@ -46,10 +57,16 @@ class Action(DurableState):
             self.exception = task.exception()
 
     async def execute(self, previous):
-        # todo figure out what to do with exceptions
-        await self.run_segment('before', self.before(previous))
-        await self.run_segment('actions', self.actions(previous))
-        await self.run_segment('after', self.after(previous))
+        segments = [
+            ('before', self.before),
+            ('actions', self.actions),
+            ('after', self.after)
+        ]
+
+        for seg in segments:
+            await self.run_segment(seg[0], seg[1](previous))
+            if self.exception is not None:
+                break
 
     async def before(self, previous):
         pass

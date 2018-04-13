@@ -1,4 +1,5 @@
-from mra.dynamic_module import DynamicModule
+from typing import List
+
 from mra.durable_state import DurableState
 from mra.actions.action import Action
 
@@ -43,7 +44,23 @@ class TaskMeta(dict):
     def last_action(self, value: Action):
         self['last_action'] = value
 
-    def report(self, logs, reports):
+    @property
+    def logs(self) -> List[str]:
+        return self.get('logs', [])
+
+    @logs.setter
+    def logs(self, logs: List[dict]):
+        self['logs'] = [log['log'] for log in logs]
+
+    @property
+    def reports(self):
+        return self.get('reports', [])
+
+    @reports.setter
+    def reports(self, reports: List[dict]):
+        self['reports'] = [log['log'] for log in reports]
+
+    def report(self):
         completed = 'completed'
         result = self.result
         maybe_exception = ''
@@ -53,17 +70,17 @@ class TaskMeta(dict):
             maybe_exception = f'Exception: {self.exception}\n\t'
 
         report_lines = []
-        if reports:
+        if self.reports:
             report_lines = [
                 '\tReports:',
-                '\t{reports}'.format(reports='\n\t'.join(reports))
+                '\t{reports}'.format(reports='\n\t'.join(self.reports))
             ]
 
         log_lines = []
-        if logs:
+        if self.logs:
             log_lines = [
                 '\tLogs:',
-                '\t{logs}'.format(logs='\n\t'.join(logs))
+                '\t{logs}'.format(logs='\n\t'.join(self.logs))
             ]
 
         lines = [
@@ -89,6 +106,12 @@ class Task(DurableState):
         self.result = None
         self.failed = False
         self.meta = TaskMeta()
+
+    def __getitem__(self, item):
+        return self.actions[item]
+
+    def __len__(self):
+        return len(self.actions)
 
     def label(self, title):
         self.meta.title = title
@@ -125,7 +148,7 @@ class Task(DurableState):
     def done(self):
         return self.failed or len(self.actions) == 0
 
-    async def advance(self):
+    async def advance(self) -> None:
         await self.current.execute(self.result)
         self.result = self.current.result
         if self.current.exception:
@@ -140,13 +163,13 @@ class Task(DurableState):
         self['done'].append(self['actions'].pop(0))
         await self.update(await self.read())
 
-    async def report(self):
-        print(self.meta.report(
-            [log['log'] for log in self._get_logs()],
-            [r['log'] for r in self._get_reports()]
-        ))
+    async def report(self, should_print) -> None:
+        self.meta.logs = self._get_logs()
+        self.meta.reports = self._get_reports()
+        if should_print:
+            print(self.meta.report())
 
-    async def run(self):
+    async def run(self, print=True) -> TaskMeta:
         await self.setup()
         while not self.done:
             await self.advance()
@@ -154,10 +177,10 @@ class Task(DurableState):
         if not self.failed:
             self.meta.completed = True
 
-        await self.report()
+        await self.report(print)
 
         await self.cleanup()
-        return self.result
+        return self.meta
 
     def __str__(self):
         return f"Task[{self.current}]->{self.next}"

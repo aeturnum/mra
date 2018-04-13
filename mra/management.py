@@ -1,5 +1,8 @@
 import asyncio
 import time
+from typing import List
+
+from mra.task import TaskMeta
 
 class TimedTask(asyncio.Task):
 
@@ -16,7 +19,7 @@ class Plan(object):
     def __init__(self, *tasks):
         self.tasks = list(tasks)
 
-    def run(self):
+    def run(self, print=True) -> List[TaskMeta]:
         loop = asyncio.get_event_loop()
         task_factory = lambda loop, coro: TimedTask(coro, loop=loop)
         loop.set_task_factory(task_factory)
@@ -24,8 +27,8 @@ class Plan(object):
 
 
         result = loop.run_until_complete(asyncio.gather(
-            *[t.run() for t in self.tasks]
+            *[t.run(print=print) for t in self.tasks]
         ))
-        loop.close()
+        # loop.close()
         return result
 

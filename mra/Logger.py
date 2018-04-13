@@ -121,7 +121,7 @@ class Logger(object):
 
         all_logs.sort(key=self._log_sort)
         # remove logs "below" the level we care about
-        return filter(lambda log: log['level'] > _Level, all_logs)
+        return filter(lambda log: log['level'] >= _Level, all_logs)
 
     def _get_reports(self):
         all_reports = list(self._reports)
@@ -131,3 +131,8 @@ class Logger(object):
         all_reports.sort(key=self._log_sort)
         return all_reports
 
+    def __str__(self):
+        return "logger"
+
+    def __repr__(self):
+        return self.__str__()
