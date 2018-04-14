@@ -4,7 +4,7 @@ from os.path import split, basename, join
 import os
 import multiprocessing
 
-from mra.settings import Settings
+from mra.settings import Settings, SettingsError
 from mra.logger import Logger
 
 # global registry
@@ -29,6 +29,12 @@ _BANNED_CLASSES = (
     'dynamic_module.DynamicModule',
     'action.Action',
     'resource_pool.ResourcePool'
+)
+
+_DEFAULT_PREFIXES = (
+    'Action.Simple.Checks',
+    'Action.Simple',
+    ''
 )
 
 _DRY_RUN_TIMEOUT = 5
@@ -119,6 +125,19 @@ class DynamicModuleManager(object):
                                 DynamicModuleManager._gather_file(path)
                             else:
                                 print(f'File {path} has a non-zero exit code, indicating problems. Skipping.')
+
+    @staticmethod
+    def CreateClass(path, args):
+        global Registry
+        global _DEFAULT_PREFIXES
+        paths = [f'{p}.{path}' for p in _DEFAULT_PREFIXES]
+        # make sure the litteral name is tried first
+        paths.insert(0, path)
+        for p in paths:
+            if p in Registry:
+                return Registry[p](*args)
+
+        raise SettingsError(f'Path {path} not found in global registry!')
 
 class DynamicModule(Logger):
     PATH = "Global"

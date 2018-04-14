@@ -1,6 +1,6 @@
-import json
+from mra.util import load_json
 
-_default_file = 'settings.json'
+_default_file = './settings.json'
 
 class SettingsError(Exception):
     pass
@@ -10,16 +10,17 @@ class Settings(object):
     def load_from_file(path=None):
         if path is None:
             global _default_file
-            path = f'./{_default_file}'
+            path = _default_file
 
-        settings_data = json.load(open(path))
-        return Settings(settings_data)
+        settings_data = load_json(open(path).read())
+        return Settings(settings_data, path)
 
-    def __init__(self, data = None):
+    def __init__(self, data = None, path=None):
         """
 
         :param dict valid_keys:
         """
+        self.path = path
         self._registry = {}
         if not data:
             data = {}
@@ -62,3 +63,4 @@ class Settings(object):
         :return:
         """
         self._registry[key] = Settings(data)
+

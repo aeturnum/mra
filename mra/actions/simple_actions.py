@@ -1,6 +1,5 @@
-import json5
-import json
 
+from mra.util import load_json
 from mra.actions.action import Action
 from mra.http_pool import HTTPPool
 
@@ -8,7 +7,7 @@ class TestException(Exception):
     pass
 
 class Get(Action):
-    PATH = "Action.Get"
+    PATH = "Action.Simple.Get"
 
     def __init__(self, url):
         super().__init__()
@@ -24,7 +23,7 @@ class Get(Action):
             return await result.text()
 
 class DictCheck(Action):
-    PATH = "Action.Checks.Dictionary"
+    PATH = "Action.Simple.Checks.Dictionary"
 
     def __init__(self, match_dict, partial=True):
         super().__init__()
@@ -52,27 +51,18 @@ class DictCheck(Action):
         return previous
 
 class JsonCheck(DictCheck):
-    PATH = "Action.Checks.Json"
+    PATH = "Action.Simple.Checks.Json"
 
     def __init__(self, match_dict:str or dict, partial=True):
         if type(match_dict) is str:
-            match_dict = self._json_load(match_dict)
+            match_dict = load_json(match_dict)
 
         super().__init__(match_dict, partial)
 
-    def _json_load(self, possible_json:str) -> dict:
-        j = None
-        try:
-            j = json.loads(possible_json)
-        except (json.JSONDecodeError, TypeError):
-            # don't catch this error if it happens
-            j = json5.loads(possible_json)
-
-        return j
 
     async def actions(self, previous: any) -> any:
         if type(previous) is str:
-            previous = self._json_load(previous)
+            previous = load_json(previous)
 
         if type(previous) is dict:
             return await super().actions(previous)
