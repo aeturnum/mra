@@ -1,11 +1,12 @@
 from mra.util import load_json
+from mra.logger import Logger
 
 _default_file = './settings.json'
 
 class SettingsError(Exception):
     pass
 
-class Settings(object):
+class Settings(Logger):
     @staticmethod
     def load_from_file(path=None):
         if path is None:
@@ -20,12 +21,13 @@ class Settings(object):
 
         :param dict valid_keys:
         """
+        super().__init__()
         self.path = path
         self._registry = {}
         if not data:
             data = {}
 
-        for key, value in data.item():
+        for key, value in data.items():
             if type(value) is dict:
                 value = Settings(value)
             self._registry[key] = value

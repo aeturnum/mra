@@ -1,8 +1,8 @@
 from typing import List
 import itertools
-
-from mra.dynamic_module import DynamicModule
+from mra.util import is_instance
 from mra.task import Task
+from mra.dynamic_module import DynamicModule, DynamicModuleManager
 
 # TODO: convert this entire file to use iterators instead of list construction. Otherwise it will get bac
 
@@ -31,6 +31,9 @@ class ActionStandin(DynamicModule):
     PATH = 'GeneratedTask'
     def __init__(self, ActionClass, *args):
         super().__init__()
+        # we're loading from settings
+        if type(ActionClass) is str:
+            ActionClass = DynamicModuleManager.LoadClass(ActionClass)
         self.action = ActionClass
         self.args = args
 
@@ -38,7 +41,7 @@ class ActionStandin(DynamicModule):
         generators = []
         positions = []
         for idx, arg in enumerate(self.args):
-            if isinstance(arg, ArgStandin):
+            if is_instance(arg, ArgStandin):
                 # get to generating!
                 generators.append(arg)
                 positions.append(idx)
@@ -63,7 +66,7 @@ class MultipleTasks(ActionStandin):
 class MultipleActions(ActionStandin):
     PATH = 'MultipleActions'
     def __str__(self):
-        return f'MultipleTasks({self.action}, {self.args})'
+        return f'MultipleActions({self.action}, {self.args})'
 
 
 class TaskGenerator(DynamicModule):
@@ -75,7 +78,7 @@ class TaskGenerator(DynamicModule):
     def _replace_multi_actions(self):
         action_gens = []
         for idx, action in enumerate(self.actions):
-            if isinstance(action, MultipleActions):
+            if is_instance(action, MultipleActions):
                 action_gens.append((idx, action))
 
         for (idx, gen) in action_gens:
@@ -91,7 +94,7 @@ class TaskGenerator(DynamicModule):
         generators = []
         positions = []
         for idx, action in enumerate(self.actions):
-            if isinstance(action, MultipleTasks):
+            if is_instance(action, ActionStandin):
                 generators.append(action)
                 positions.append(idx)
 

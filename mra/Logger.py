@@ -1,5 +1,6 @@
 from datetime import datetime
 from logging import getLogger
+from mra.util import is_instance
 
 # Levels
 Log_LEVEL_SPEW = 0
@@ -99,7 +100,7 @@ class Logger(object):
         self._depth += 1
 
     def _adopt(self, other_logger):
-        if not isinstance(other_logger, Logger):
+        if not is_instance(other_logger, Logger):
             raise TypeError(f'{other_logger} is not a logger!')
 
         if other_logger._parent is not None:

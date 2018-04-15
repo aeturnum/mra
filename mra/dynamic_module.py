@@ -127,7 +127,7 @@ class DynamicModuleManager(object):
                                 print(f'File {path} has a non-zero exit code, indicating problems. Skipping.')
 
     @staticmethod
-    def CreateClass(path, args):
+    def LoadClass(path):
         global Registry
         global _DEFAULT_PREFIXES
         paths = [f'{p}.{path}' for p in _DEFAULT_PREFIXES]
@@ -135,9 +135,13 @@ class DynamicModuleManager(object):
         paths.insert(0, path)
         for p in paths:
             if p in Registry:
-                return Registry[p](*args)
+                return Registry[p]
 
         raise SettingsError(f'Path {path} not found in global registry!')
+
+    @staticmethod
+    def CreateClass(path, args):
+        return DynamicModuleManager.LoadClass(path)(*args)
 
 class DynamicModule(Logger):
     PATH = "Global"
@@ -158,7 +162,7 @@ class DynamicModule(Logger):
                 f"Can't register {module}. Path {path} is already registered to module {Registry[path]}!"
             )
         Registry[path] = module
-        print(f'Added {module} under path "{path}"')
+        # print(f'Added {module} under path "{path}"')
 
     @staticmethod
     def create(path, settings):
