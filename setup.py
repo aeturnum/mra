@@ -8,6 +8,12 @@ setup(name='MRA',
       author='Drex',
       author_email='aeturnum@gmail.com',
       packages=['mra'],
+      install_requires=[
+          "json5",
+          'aiosqlite',
+          'aiohttp',
+          'beautifulsoup4'
+      ],
       license="MIT",
       entry_points={
           'console_scripts': [
