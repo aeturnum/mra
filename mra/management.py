@@ -64,10 +64,12 @@ class JobSpec(Settings):
 
         for entry in os.listdir(path):
             # todo: skip settings file
-            name, ext = os.path.split(entry)
+            name, ext = os.path.splitext(entry)
             if '.json' in ext and name.startswith('job_'):
                 # we got one
-                job = load_json(open(os.path.join(path, entry)).read())
+                f = open(os.path.join(path, entry))
+                job = load_json(f.read())
+                f.close()
                 yield JobSpec(settings, job, entry)
 
     def __init__(self, settings, job_data, filename):

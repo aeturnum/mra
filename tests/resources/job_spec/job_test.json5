@@ -1,0 +1,8 @@
+{
+	"title": "etc",
+	// JSON5 has comments!
+	"actions": [
+		"Get('www.test.com')",
+        "MultipleActions('Get', \"ArgFromList(['a', 'b'])\")"
+	]
+}
