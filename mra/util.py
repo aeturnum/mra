@@ -1,6 +1,9 @@
 import json
 import json5
 
+def mod_path(*args):
+    return '.'.join(args)
+
 def load_json(json_string:str):
     j = None
     try:

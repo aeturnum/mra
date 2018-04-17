@@ -8,5 +8,10 @@ setup(name='MRA',
       author='Drex',
       author_email='aeturnum@gmail.com',
       packages=['mra'],
-      license="MIT"
+      license="MIT",
+      entry_points={
+          'console_scripts': [
+              'mra = mra.__main__:main'
+          ]
+}
      )

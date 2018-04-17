@@ -7,6 +7,7 @@ class TestException(Exception):
     pass
 
 class Get(Action):
+    PREFIX = 'Action.Simple'
     PATH = "Action.Simple.Get"
 
     def __init__(self, url):
@@ -23,6 +24,7 @@ class Get(Action):
             return await result.text()
 
 class DictCheck(Action):
+    PREFIX = 'Action.Simple.Checks'
     PATH = "Action.Simple.Checks.Dictionary"
 
     def __init__(self, match_dict, partial=True):
@@ -51,6 +53,7 @@ class DictCheck(Action):
         return previous
 
 class JsonCheck(DictCheck):
+    PREFIX = 'Action.Simple.Checks'
     PATH = "Action.Simple.Checks.Json"
 
     def __init__(self, match_dict:str or dict, partial=True):

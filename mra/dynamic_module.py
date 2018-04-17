@@ -15,12 +15,14 @@ Registry = {}
 _DEFAULT_MODULE_ROOTS = (
     # package directory
     split(__file__)[0],
+    os.getcwd()
 )
 
 # todo add testing files
 # don't add this file
 _BANNED_FILES = (
     __file__,
+    '__main__.py' # banned for real
 )
 
 # Classes that we don't want added
@@ -32,13 +34,14 @@ _BANNED_CLASSES = (
 )
 
 _DEFAULT_PREFIXES = (
-    'Action.Simple.Checks',
-    'Action.Simple',
     ''
 )
 
 _DRY_RUN_TIMEOUT = 5
 
+# modified at runtime
+
+Prefixes = set()
 
 class DynamicModuleManager(object):
     @staticmethod
@@ -103,7 +106,8 @@ class DynamicModuleManager(object):
         for action_directory in _DEFAULT_MODULE_ROOTS:
             for dir_name, sub_dirs, file_list in os.walk(action_directory):
                 for file_name in file_list:
-                    if file_name.endswith(".py"):
+                    # open non-special python files
+                    if file_name.endswith(".py") and not file_name.startswith('__'):
                         path = join(dir_name, file_name)
                         if path in _BANNED_FILES:
                             continue
@@ -122,6 +126,7 @@ class DynamicModuleManager(object):
                         else:
                             if process.exitcode == 0:
                                 # actually add the modules
+                                print(f'loading: {path}')
                                 DynamicModuleManager._gather_file(path)
                             else:
                                 print(f'File {path} has a non-zero exit code, indicating problems. Skipping.')
@@ -130,8 +135,11 @@ class DynamicModuleManager(object):
     def LoadClass(path):
         global Registry
         global _DEFAULT_PREFIXES
+        global Prefixes
         paths = [f'{p}.{path}' for p in _DEFAULT_PREFIXES]
+        paths.extend([f'{p}.{path}' for p in Prefixes])
         # make sure the litteral name is tried first
+        # todo: this could be faster, but it's setup, which can be slow as hell
         paths.insert(0, path)
         for p in paths:
             if p in Registry:
@@ -145,6 +153,7 @@ class DynamicModuleManager(object):
 
 class DynamicModule(Logger):
     PATH = "Global"
+    PREFIX = None
     SETTINGS_KEYS = []
     SETTINGS = None
 
@@ -155,15 +164,17 @@ class DynamicModule(Logger):
     @staticmethod
     def _global_register(path, module):
         global Registry
-        global Registry_Lock
-        # with (await Registry_Lock):
+        global Prefixes
         if path in Registry:
             raise Exception(
                 f"Can't register {module}. Path {path} is already registered to module {Registry[path]}!"
             )
         Registry[path] = module
-        # print(f'Added {module} under path "{path}"')
+        if module.PREFIX is not None:
+            Prefixes.add(module.PREFIX)
+        print(f'Added {module} under path "{path}"')
 
+    # todo: maybe delete this?
     @staticmethod
     def create(path, settings):
         global Registry
