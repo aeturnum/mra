@@ -1,6 +1,28 @@
 import json
 import json5
 
+def verbose_equals(a:dict, b:dict):
+    # check types are same, otherwise false
+    if type(a) is not type(b):
+        return False
+    # if we're in a dict, check all keys
+    if type(a) is dict:
+        for k, v in a.items():
+            if not verbose_equals(v, b[k]):
+                return False
+    # if we're in a list, check all members
+    # order matters!
+    elif type(a) is list:
+        for idx, v in enumerate(a):
+            if not verbose_equals(v, b[idx]):
+                return False
+    # else just check values
+    else:
+        return a == b
+    # todo: sets and other data types I'm not using at the moment
+
+    return True
+
 def mod_path(*args):
     return '.'.join(args)
 
