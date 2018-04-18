@@ -107,9 +107,6 @@ class Task(DurableState):
         self.failed = False
         self.meta = TaskMeta()
 
-    def __getitem__(self, item):
-        return self.actions[item]
-
     def __len__(self):
         return len(self.actions)
 

@@ -28,15 +28,15 @@ class TaskGeneratorTest(BaseTest):
         self.assertEqual(2, len(tasks[0]))
         self.assertEqual(2, len(tasks[1]))
 
-        self.assertEqual(tasks[0][0][0], 1)
-        self.assertEqual(tasks[0][1][0], 'a')
-        self.assertEqual(tasks[0][1][1], 'b')
-        self.assertEqual(tasks[0][1][2], 'c')
+        self.assertEqual(tasks[0].actions[0][0], 1)
+        self.assertEqual(tasks[0].actions[1][0], 'a')
+        self.assertEqual(tasks[0].actions[1][1], 'b')
+        self.assertEqual(tasks[0].actions[1][2], 'c')
 
-        self.assertEqual(tasks[1][0][0], 1)
-        self.assertEqual(tasks[1][1][0], 'a')
-        self.assertEqual(tasks[1][1][1], 'c')
-        self.assertEqual(tasks[1][1][2], 'c')
+        self.assertEqual(tasks[1].actions[0][0], 1)
+        self.assertEqual(tasks[1].actions[1][0], 'a')
+        self.assertEqual(tasks[1].actions[1][1], 'c')
+        self.assertEqual(tasks[1].actions[1][2], 'c')
 
     def test_action_gen(self):
         # should generate two task lists
@@ -48,13 +48,13 @@ class TaskGeneratorTest(BaseTest):
         # task has three actions
         self.assertEqual(3, len(tasks[0]))
 
-        self.assertEqual(tasks[0][0][0], 1)
-        self.assertEqual(tasks[0][1][0], 'a')
-        self.assertEqual(tasks[0][1][1], 'b')
-        self.assertEqual(tasks[0][1][2], 'c')
-        self.assertEqual(tasks[0][2][0], 'a')
-        self.assertEqual(tasks[0][2][1], 'c')
-        self.assertEqual(tasks[0][2][2], 'c')
+        self.assertEqual(tasks[0].actions[0][0], 1)
+        self.assertEqual(tasks[0].actions[1][0], 'a')
+        self.assertEqual(tasks[0].actions[1][1], 'b')
+        self.assertEqual(tasks[0].actions[1][2], 'c')
+        self.assertEqual(tasks[0].actions[2][0], 'a')
+        self.assertEqual(tasks[0].actions[2][1], 'c')
+        self.assertEqual(tasks[0].actions[2][2], 'c')
 
 if __name__ == '__main__':
     unittest.main()

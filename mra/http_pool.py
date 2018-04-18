@@ -46,7 +46,7 @@ class HTTPPool(ResourcePool):
         if (method == self._GET):
             result = await self._resource.get(url, params=params)
         if (method == self._POST):
-            result = await self._resource.post(url, params=params, body=body)
+            result = await self._resource.post(url, params=params, data=body)
         if (method == self._POST_JSON):
             headers['Content-Type'] = "application/json"
             if type(body) is not dict:
