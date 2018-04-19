@@ -46,13 +46,14 @@ class Action(DurableState):
             # cancel coro because we don't know how to deal with it
             loop.create_task(result).cancel()
             result = None
-
-        await self.update({label:{
+        state_update = {label: {
             'duration': task.cputime if hasattr(task, 'cputime') else 0,
             'result': result,
             # Could save the exception in the state, but I don't think they can be pickled reliably
             # 'exception': task.exception()
-        }})
+        }}
+        self._system(state_update)
+        await self.update(state_update)
         if task.exception():
             self.exception = task.exception()
 

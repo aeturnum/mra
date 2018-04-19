@@ -126,7 +126,7 @@ class DynamicModuleManager(object):
                         else:
                             if process.exitcode == 0:
                                 # actually add the modules
-                                print(f'loading: {path}')
+                                # print(f'loading: {path}')
                                 DynamicModuleManager._gather_file(path)
                             else:
                                 print(f'File {path} has a non-zero exit code, indicating problems. Skipping.')
@@ -172,7 +172,7 @@ class DynamicModule(Logger):
         Registry[path] = module
         if module.PREFIX is not None:
             Prefixes.add(module.PREFIX)
-        print(f'Added {module} under path "{path}"')
+        # print(f'Added {module} under path "{path}"')
 
     # todo: maybe delete this?
     @staticmethod

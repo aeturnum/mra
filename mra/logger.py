@@ -4,15 +4,16 @@ from mra.util import is_instance
 
 # Levels
 Log_LEVEL_SPEW = 0
-LOG_LEVEL_DEBUG = 1
-LOG_LEVEL_WARN = 2
-LOG_LEVEL_ERROR = 3
+Log_LEVEL_SYSTEM = 1
+LOG_LEVEL_DEBUG = 2
+LOG_LEVEL_WARN = 3
+LOG_LEVEL_ERROR = 4
 
 # non-log
 LOG_LEVEL_REPORT = -1
 
 # global log level
-_Level = 1
+_Level = LOG_LEVEL_DEBUG
 
 
 class Logger(object):
@@ -20,9 +21,10 @@ class Logger(object):
     _logger_name = ""
 
     _l0 = Log_LEVEL_SPEW
-    _l1 = LOG_LEVEL_DEBUG
-    _l2 = LOG_LEVEL_WARN
-    _l3 = LOG_LEVEL_ERROR
+    _l1 = Log_LEVEL_SYSTEM
+    _l2 = LOG_LEVEL_DEBUG
+    _l3 = LOG_LEVEL_WARN
+    _l4 = LOG_LEVEL_ERROR
 
     _r = LOG_LEVEL_REPORT
 
@@ -48,12 +50,15 @@ class Logger(object):
             l.append(f'{key}:{value}')
         return ','.join(l)
 
-    def _build_final_string(self, now: datetime, log_str:str, *args):
+    def _build_final_string(self, now: datetime, log_str:any, *args) -> str:
         time_string = now.strftime('%H:%M:%S.%f')
-        log_str = log_str.format(*args)
+        if len(args) > 0:
+            log_str = log_str.format(*args)
+        else:
+            log_str = str(log_str)
         return f'{self._depth * self._depth_character}[{time_string}] {self}::{log_str}'
 
-    def _log(self, level:int, log_str:str, *args):
+    def _log(self, level:int, log_str:any, *args):
         now = datetime.utcnow()
         log_str = self._build_final_string(now, log_str, *args)
 
@@ -63,13 +68,14 @@ class Logger(object):
                 'level': level
         }
 
-        if level in [self._l0, self._l1, self._l2]:
+        if level in [self._l0, self._l1, self._l2, self._l3, self._l4]:
             self._logs.append(log)
         if level in [self._r]:
             self._reports.append(log)
 
         # if we have a parent, logs will be collected
         if not self._parent:
+            print('no parent')
             print(log_str)
             if level == self._l0:
                 self._logger.debug(log_str)
@@ -78,19 +84,22 @@ class Logger(object):
             if level == self._l2:
                 self._logger.error(log_str)
 
-    def _spew(self, log_str:str, *args):
+    def _spew(self, log_str:any, *args):
         self._log(self._l0, log_str, *args)
 
-    def _debug(self, log_str:str, *args):
+    def _system(self, log_str:any, *args):
         self._log(self._l1, log_str, *args)
 
-    def _warn(self, log_str:str, *args):
+    def _debug(self, log_str:any, *args):
         self._log(self._l2, log_str, *args)
 
-    def _error(self, log_str:str, *args):
+    def _warn(self, log_str:any, *args):
         self._log(self._l3, log_str, *args)
 
-    def _report(self, log_str:str, *args):
+    def _error(self, log_str:any, *args):
+        self._log(self._l4, log_str, *args)
+
+    def _report(self, log_str:any, *args):
         self._log(self._r, log_str, *args)
 
     def _up(self):
@@ -115,12 +124,14 @@ class Logger(object):
 
     def _get_logs(self):
         global _Level
+        print(f'_get_logs() _Level: {_Level}')
 
         all_logs = list(self._logs)
         for child in self._children:
             all_logs.extend(child._get_logs())
 
         all_logs.sort(key=self._log_sort)
+        print([log['level'] for log in all_logs])
         # remove logs "below" the level we care about
         return filter(lambda log: log['level'] >= _Level, all_logs)
 

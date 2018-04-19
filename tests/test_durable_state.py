@@ -2,7 +2,7 @@ import unittest
 from os.path import exists
 from os import unlink
 
-from .base_test import BaseTest
+from base_test import BaseTest
 
 from mra.durable_state import DurableState
 

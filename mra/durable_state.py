@@ -1,4 +1,5 @@
 import aiosqlite
+import jsonpickle
 
 from mra.dynamic_module import DynamicModule
 from mra.logger import Logger
@@ -38,7 +39,7 @@ class DBDict(dict, Logger):
 
     @property
     def str_state(self) -> str:
-        return json.dumps(self).replace('"', '\\"')
+        return jsonpickle.dumps(self.dict())
 
     @property
     def next(self) -> int:
@@ -73,7 +74,8 @@ class DBDict(dict, Logger):
         if row is None:
             raise DBError("ID does not exist")
         # (id, type, state)
-        for key, item in json.loads(row[2].replace('\\"', '"')).items():
+        saved_item = jsonpickle.loads(row[2])
+        for key, item in saved_item.items():
             self[key] = item
         self._loaded = True
 

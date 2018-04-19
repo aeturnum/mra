@@ -12,7 +12,8 @@ setup(name='MRA',
           "json5",
           'aiosqlite',
           'aiohttp',
-          'beautifulsoup4'
+          'beautifulsoup4',
+          'jsonpickle'
       ],
       license="MIT",
       entry_points={

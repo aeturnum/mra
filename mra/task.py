@@ -167,17 +167,19 @@ class Task(DurableState):
             print(self.meta.report())
 
     async def run(self, print=True) -> TaskMeta:
-        await self.setup()
-        while not self.done:
-            await self.advance()
+        try:
+            await self.setup()
+            while not self.done:
+                await self.advance()
 
-        if not self.failed:
-            self.meta.completed = True
+            if not self.failed:
+                self.meta.completed = True
 
-        await self.report(print)
+            await self.cleanup()
+            return self.meta
+        finally:
+            await self.report(print)
 
-        await self.cleanup()
-        return self.meta
 
     def __str__(self):
         return f"Task[{self.current}]->{self.next}"
