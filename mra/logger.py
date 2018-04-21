@@ -26,6 +26,14 @@ class Logger(object):
     _l3 = LOG_LEVEL_WARN
     _l4 = LOG_LEVEL_ERROR
 
+    _tags = {
+        Log_LEVEL_SPEW: 'P',
+        Log_LEVEL_SYSTEM: 'S',
+        LOG_LEVEL_DEBUG: 'D',
+        LOG_LEVEL_WARN: 'W',
+        LOG_LEVEL_ERROR: 'E',
+    }
+
     _r = LOG_LEVEL_REPORT
 
     def __init__(self):
@@ -50,17 +58,17 @@ class Logger(object):
             l.append(f'{key}:{value}')
         return ','.join(l)
 
-    def _build_final_string(self, now: datetime, log_str:any, *args) -> str:
+    def _build_final_string(self, level:int, now: datetime, log_str:any, *args) -> str:
         time_string = now.strftime('%H:%M:%S.%f')
         if len(args) > 0:
             log_str = log_str.format(*args)
         else:
             log_str = str(log_str)
-        return f'{self._depth * self._depth_character}[{time_string}] {self}::{log_str}'
+        return f'{self._depth * self._depth_character}{self._tags[level]}|[{time_string}] {self}::{log_str}'
 
     def _log(self, level:int, log_str:any, *args):
         now = datetime.utcnow()
-        log_str = self._build_final_string(now, log_str, *args)
+        log_str = self._build_final_string(level, now, log_str, *args)
 
         log = {
                 'time': now,
@@ -74,8 +82,8 @@ class Logger(object):
             self._reports.append(log)
 
         # if we have a parent, logs will be collected
+        print(log_str)
         if not self._parent:
-            print('no parent')
             print(log_str)
             if level == self._l0:
                 self._logger.debug(log_str)
@@ -110,7 +118,10 @@ class Logger(object):
 
     def _adopt(self, other_logger):
         if not is_instance(other_logger, Logger):
-            raise TypeError(f'{other_logger} is not a logger!')
+            # instead, let's silently NOP for now
+            # this ineraction always happens within mra so it's less likely to be abused
+            # raise TypeError(f'{other_logger} is not a logger!')
+            return
 
         if other_logger._parent is not None:
             raise ValueError(f'{other_logger} already adopted!')

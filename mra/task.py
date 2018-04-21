@@ -1,64 +1,17 @@
-from typing import List
-
 from mra.durable_state import DurableState
-from mra.actions.action import Action
+from mra.util import UpdatableDict, is_instance
+from mra.actions.action import EarlyExit
 
-class TaskMeta(dict):
-    @property
-    def title(self) -> str:
-        return self.get('title', 'Title Not Set')
+class TaskMeta(UpdatableDict):
 
-    @title.setter
-    def title(self, value: str):
-        self['title'] = value
-
-    @property
-    def completed(self) -> bool:
-        return self.get('completed', False)
-
-    @completed.setter
-    def completed(self, value: bool):
-        self['completed'] = value
-
-    @property
-    def result(self) -> any:
-        return self.get('result', None)
-
-    @result.setter
-    def result(self, value: any):
-        self['result'] = value
-
-    @property
-    def exception(self) -> Exception or None:
-        return self.get('exception', None)
-
-    @exception.setter
-    def exception(self, value: Exception):
-        self['exception'] = value
-
-    @property
-    def last_action(self):
-        return self.get('last_action', None)
-
-    @last_action.setter
-    def last_action(self, value: Action):
-        self['last_action'] = value
-
-    @property
-    def logs(self) -> List[str]:
-        return self.get('logs', [])
-
-    @logs.setter
-    def logs(self, logs: List[dict]):
-        self['logs'] = [log['log'] for log in logs]
-
-    @property
-    def reports(self):
-        return self.get('reports', [])
-
-    @reports.setter
-    def reports(self, reports: List[dict]):
-        self['reports'] = [log['log'] for log in reports]
+    title = UpdatableDict._variable_property('title', 'Title Not Set')
+    completed = UpdatableDict._variable_property('completed', False)
+    still_running = UpdatableDict._variable_property('still_running', True)
+    result = UpdatableDict._variable_property('result')
+    exception = UpdatableDict._variable_property('exception')
+    last_action = UpdatableDict._variable_property('last_action')
+    logs = UpdatableDict._variable_property('logs', [])
+    reports = UpdatableDict._variable_property('reports', [])
 
     def report(self):
         completed = 'completed'
@@ -107,6 +60,20 @@ class Task(DurableState):
         self.failed = False
         self.meta = TaskMeta()
 
+    @property
+    def current(self):
+        return self.actions[0]
+
+    @property
+    def next(self):
+        if len(self.actions) > 1:
+            return self.actions[1]
+        return None
+
+    @property
+    def done(self):
+        return not self.meta.still_running
+
     def __len__(self):
         return len(self.actions)
 
@@ -114,6 +81,7 @@ class Task(DurableState):
         self.meta.title = title
 
     async def setup(self):
+        # todo: create tooling around browsing and understanding history
         await self.update({
            'done': [],
            'actions': [a.durable_id for a in self.actions]
@@ -131,54 +99,60 @@ class Task(DurableState):
         for a in self.completed:
             await a.cleanup()
 
-    @property
-    def current(self):
-        return self.actions[0]
-
-    @property
-    def next(self):
-        if len(self.actions) > 1:
-            return self.actions[1]
-        return None
-
-    @property
-    def done(self):
-        return self.failed or len(self.actions) == 0
-
     async def advance(self) -> None:
+        # execute current action
         await self.current.execute(self.result)
+        # get result
         self.result = self.current.result
-        if self.current.exception:
-            self.failed = True
-            self.meta.exception = self.current.exception
-            self.meta.last_action = self.current
-            self.meta.completed = False
+        # update meta fields
+        self.meta.last_action = self.current
+        self.meta.exception = self.current.exception
 
+        # make sure action does any cleanup
         await self.current.is_done()
 
+        # move to done categories
         self.completed.append(self.actions.pop(0))
         self['done'].append(self['actions'].pop(0))
+
+        # check if we need to perform more actions
+        if self.meta.exception is not None:
+            # all exceptions mean we're done
+            self.meta.still_running = False
+            # assume this means it's failed
+            self.meta.completed = False
+            if is_instance(self.meta.exception, EarlyExit):
+                # if it's an early exit, we need to get its values
+                self.meta.completed = self.meta.exception.completed
+                # return would be impossible
+                self.result = self.meta.exception.result
+                # blank exception, its job is done
+                # todo: make this a special case for reporting
+                self.meta.exception = None
+
         await self.update(await self.read())
 
-    async def report(self, should_print) -> None:
+        if len(self.actions) is 0:
+            # we're done
+            self.meta.still_running = False
+
+    async def report(self, should_print) -> TaskMeta:
         self.meta.logs = self._get_logs()
         self.meta.reports = self._get_reports()
         if should_print:
             print(self.meta.report())
 
-    async def run(self, print=True) -> TaskMeta:
+        return self.meta
+
+    async def run(self, print_result=True) -> TaskMeta:
         try:
             await self.setup()
             while not self.done:
                 await self.advance()
 
-            if not self.failed:
-                self.meta.completed = True
-
             await self.cleanup()
-            return self.meta
         finally:
-            await self.report(print)
+            return await self.report(print_result)
 
 
     def __str__(self):

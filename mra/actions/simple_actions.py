@@ -1,10 +1,8 @@
 
 from mra.util import load_json
-from mra.actions.action import Action
+from mra.actions.action import Action, TestException, EarlyExit
 from mra.http_pool import HTTPPool
 
-class TestException(Exception):
-    pass
 
 class Get(Action):
     PREFIX = 'Action.Simple'
@@ -71,3 +69,7 @@ class JsonCheck(DictCheck):
             return await super().actions(previous)
         else:
             raise TypeError(f'JsonCheck expects JSON, got {type(previous)}')
+
+class Check(DictCheck):
+    PREFIX = 'Action.Simple.Checks'
+    PATH = "Action.Simple.Check"

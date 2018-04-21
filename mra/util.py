@@ -1,5 +1,42 @@
 import json
 import json5
+import collections
+
+from operator import itemgetter, setitem
+
+
+class UpdatableDict(dict):
+    @classmethod
+    def create_from_dict(cls, d:dict):
+        result = cls()
+        result.update_and_check(d)
+        return result
+
+    # helper to create a property
+    @staticmethod
+    def _variable_property(key, default=None):
+
+        def getter(self):
+            self.get(key, default)
+
+        def setter(self, v):
+            setitem(self, key, v)
+
+        def deleter(self):
+            if key in self:
+                del self[key]
+
+        return property(itemgetter(key), setter, deleter)
+
+    def update_and_check(self, info: dict):
+        for key, value in info.items():
+            if key not in self or self.get(key) == None:
+                setitem(self, key, value)
+            else:
+                if not verbose_equals(self[key], value):
+                    raise Exception(
+                        f'While updating a Terminal, non-matching info was found for "{key}": {value} != {self[key]}'
+                    )
 
 def verbose_equals(a:dict, b:dict):
     # check types are same, otherwise false
@@ -119,7 +156,8 @@ def is_instance(object:object, container_or_class):
         object = object.__class__
 
     # put it in a list
-    if not hasattr(container_or_class, '__getitem__'):
+    # if not hasattr(container_or_class, '__getitem__'):
+    if not isinstance(container_or_class, collections.Iterable):
         container_or_class = [container_or_class]
     matching_classes = [ClassInfo(cls) for cls in container_or_class]
 

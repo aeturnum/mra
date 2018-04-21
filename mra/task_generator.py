@@ -18,7 +18,6 @@ class ArgFromList(ArgStandin):
     def __init__(self, lst:list):
         super().__init__()
         self.list = lst
-        self._indx = 0
 
     def __iter__(self):
         for v in self.list:
@@ -26,6 +25,26 @@ class ArgFromList(ArgStandin):
 
     def __str__(self):
         return f'ArgFromList({len(self.list)}items)'
+
+class ArgFromFile(ArgStandin):
+    PATH = 'ArgFromFile'
+    def __init__(self, filename):
+        super().__init__()
+        self.filename = filename
+
+    def __iter__(self):
+        with open(self.filename, 'r') as f:
+            for line in f:
+                # eliminate whitespace
+                line = line.strip()
+                # allow comments
+                if line[0] in ['#']:
+                    # don't load
+                    continue
+                yield line
+
+    def __str__(self):
+        return f'ArgFromFile({self.filename})'
 
 class ActionStandin(DynamicModule):
     PATH = 'GeneratedTask'
@@ -90,15 +109,18 @@ class TaskGenerator(DynamicModule):
 
     def __iter__(self) -> List[Task]:
         # first pass, find MultipleAction standins
+        print('finding multiactions')
         self._replace_multi_actions()
         generators = []
         positions = []
+        print('finding multitasks')
         for idx, action in enumerate(self.actions):
             if is_instance(action, ActionStandin):
                 generators.append(action)
                 positions.append(idx)
 
         for combo in itertools.product(*generators):
+            print(f'combo: {combo}')
             # copy list
             actions = list(self.actions)
             for idx, pos in enumerate(positions):

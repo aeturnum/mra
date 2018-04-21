@@ -4,4 +4,4 @@ class Test(DynamicModule):
     pass
 
 while True:
-    print("hello")
+    print("dynamic_module_blocking_test")

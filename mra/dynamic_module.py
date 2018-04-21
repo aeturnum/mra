@@ -2,6 +2,7 @@ import importlib.util
 import inspect
 from os.path import split, basename, join
 import os
+import sys
 import multiprocessing
 
 from mra.settings import Settings, SettingsError
@@ -37,7 +38,8 @@ _DEFAULT_PREFIXES = (
     ''
 )
 
-_DRY_RUN_TIMEOUT = 5
+# this can probably be a *lot* lower
+_DRY_RUN_TIMEOUT = 0.5
 
 # modified at runtime
 
@@ -61,6 +63,8 @@ class DynamicModuleManager(object):
         :param bool test_process:  If true, this is hosted in a separate process and should not load modules
         :return:
         """
+        if test_process:
+            sys.stdout = open(os.devnull, 'w')
         global _BANNED_CLASSES
 
         # this must be called in a thread because if the module exec blocks, it must be killed

@@ -29,8 +29,11 @@ class TimedTask(asyncio.Task):
 
 class Plan(object):
     PATH = "Plan"
-    def __init__(self, *tasks):
+    def __init__(self, *tasks, setup_task=None):
+        print(f"plan({tasks}, {setup_task})")
         self.tasks = list(tasks)
+        self.setup = list(setup_task)
+        print(f"plan({tasks}, {setup_task}) done")
 
     def run(self, print=True) -> List[TaskMeta]:
         loop = asyncio.get_event_loop()
@@ -38,7 +41,10 @@ class Plan(object):
         loop.set_task_factory(task_factory)
         # setup queue
 
-
+        if self.setup:
+            loop.run_until_complete(asyncio.gather(
+                *[t.run(False) for t in self.setup]
+            ))
         result = loop.run_until_complete(asyncio.gather(
             *[t.run(print=print) for t in self.tasks]
         ))
@@ -46,9 +52,128 @@ class Plan(object):
         return result
 
 
+# why do I always do this to myself?
+class ArgParser(object):
+    _seps = ('(', ',')
+    _special_classes = (
+        ArgStandin,
+        ActionStandin,
+    )
+
+    def __init__(self, arg_str: str):
+        self.args = arg_str
+        self.contains_generator = False
+
+    def _edge_trim(self, s: str, ends:str):
+        if s[0] == ends[0] and s[-1] == ends[-1]:
+            s = s[1:-1]
+
+        return s
+
+    @staticmethod
+    def _convert(arg, converter):
+        if type(arg) is str:
+            try:
+                arg = converter(arg)
+            except ValueError:
+                pass
+        return arg
+
+    def _process_call(self, arg: str):
+        arg = arg.strip()
+        loc = arg.find('(')
+        name, inner_args = arg[:loc], arg[loc:]
+        try:
+            cls = DynamicModuleManager.LoadClass(name)
+        except SettingsError:
+            # treat it as a string literal
+            return self._process_arg(arg)
+
+        sub_ap = ArgParser(inner_args)
+        action = cls(*[a for a in sub_ap])
+        if is_instance(action, self._special_classes) or sub_ap.contains_generator:
+            self.contains_generator = True
+
+        return action
+
+
+    def _process_arg(self, arg: str):
+        arg = arg.strip()
+        arg = self._convert(arg, int)
+        arg = self._convert(arg, float)
+        # normalize strings
+        if type(arg) is str:
+            # strip quotes and escapes
+            arg = arg.strip('\'"\\')
+
+        return arg
+
+    def _next_sep(self, s: str):
+        min = [None]
+        distance = [(sep, s.find(sep)) for sep in self._seps]
+        for d in distance:
+            # not found
+            if d[1] == -1:
+                continue
+
+            if min[0] is None:
+                min = d
+            if d[1] < min[1]:
+                min = d
+
+        return min[0]
+
+    def _match_parens(self, s: str):
+        parens = []
+        for idx, c in enumerate(s):
+            if c == '(':
+                parens.append('(')
+            if c == ')':
+                if len(parens) == 0:
+                    raise Exception(f"Something has gone wrong parsing {s}")
+                parens.pop()
+                if len(parens) == 0:
+                    return idx + 1
+
+        raise Exception(f"Unmatched parens in {s}")
+
+    def __iter__(self):
+        args = self.args.strip()  # whitespace
+        args = self._edge_trim(args, '()')
+
+        # are you ready for amateur parsing code?
+        while True:
+            # we don't care about white space
+            args = args.strip()
+
+            if args == '':
+                # done
+                break
+
+            # can be left after parsing an object
+            if args[0] == ',':
+                args = args[1:]
+
+            sep = self._next_sep(args)
+            if sep == '(':
+                # open paren before a comma. We need to count open / close parens
+                idx = self._match_parens(args)
+                arg, args = args[:idx], args[idx:]
+                yield self._process_call(arg)
+            elif sep == ',':
+                # comma before paren. Easy case
+                arg, args = args.split(',', 1)
+                yield self._process_arg(arg)
+            elif sep == None:
+                yield self._process_arg(args)
+                break
+            else:
+                raise Exception(f"huh?: {args}")
+
 class JobSpec(Settings):
     _title_key = 'title'
     _actions_key = 'actions'
+    _setup_key = 'setup'
 
     _dsl_re = '([^\()]+)\(([^\)]*)\)'
 
@@ -82,67 +207,9 @@ class JobSpec(Settings):
     def actions(self):
         return self.get(self._actions_key, [])
 
-    def _create_arg_from_str(self, arg):
-        # ClassName(arg, arg, arg)
-        match = re.match(self._dsl_re, arg)
-        if not match:
-            return arg
-        # a version of eval that won't do anything algorithmic
-        try:
-            return self._create_action(match.group(1), ast.literal_eval(f'[{match.group(2)}]'))
-        except:
-            self._warn('Tried to parse arg "{}" as a python object, but failed.', arg)
-            # if this breaks, try the other way
-            return arg
-
-    def _create_action(self, name, args):
-        converted_args = []
-        # check for special arguments
-        for arg in args:
-            if type(arg) is str:
-                converted_args.append(self._create_arg_from_str(arg))
-            elif type(arg) is dict:
-                if 'name' in arg and 'args' in arg and len(arg.keys()) == 2:
-                    # this could go on forever, so we'll just cut it here
-                    converted_args.append(self._create_action(
-                        arg['name'],
-                        arg['args']
-                    ))
-            else:
-                converted_args.append(arg)
-
-
-        action = DynamicModuleManager.CreateClass(name, converted_args)
-        if is_instance(action, self._special_classes):
-            self.generator = True
-
-        return action
-
-    def _parse_dsl(self, dsl_str:str):
-        # ClassName(arg, arg, arg)
-        loc = dsl_str.find('(')
-        if loc < 0:
-            raise SettingsError(f'Action "{dsl_str}" incorrectly formatted.')
-
-        name, unstripped_args = dsl_str[:loc], dsl_str[loc:]
-        args = unstripped_args.strip() # whitespace
-        args = args.strip('(')
-        args = args.strip(')')
-
-        if len(args) == len(unstripped_args):
-            raise SettingsError(f'Action "{dsl_str}" incorrectly formatted.')
-
-        # a version of eval that won't do anything algorithmic
-        return self._create_action(name, ast.literal_eval(f'[{args}]'))
-
-    def _parse_action(self, action):
-        if type(action) is str:
-            return self._parse_dsl(action)
-
-        if type(action) is dict:
-            if 'name' not in action or 'args' not in action:
-                raise SettingsError(f'Action "{action}" missing "name" or "args" key.')
-            return self._create_action(action['name'], action['args'])
+    @property
+    def setup(self):
+        return self.get(self._setup_key, [])
 
     def create_plan(self) -> Plan:
         # {
@@ -154,13 +221,43 @@ class JobSpec(Settings):
         # ]
         # }
         # make a task
-        # todo: don't immediately create task, instead see if we need to make a task generator wrapper
-        action_list = [self._parse_action(a) for a in self.actions]
-        if self.generator:
+        print('create_plan')
+        setup = None
+        if self.setup:
+            setup = []
+            generator = False
+            for action in self.setup:
+                ap = ArgParser(action)
+                # todo: god help me, fix this
+                action = [a for a in ap]
+                if len(action) > 1:
+                    raise SettingsError(f'Action {action} is malformed')
+                setup.append(action[0])
+                generator = generator or ap.contains_generator
+            if generator:
+                setup = TaskGenerator(*setup)
+                setup = [t for t in setup]
+            else:
+                setup = Task(*setup)
+
+        print('setup done')
+        generator = False
+        action_list = []
+        for action in self.actions:
+            ap = ArgParser(action)
+            # todo: god help me, fix this
+            action = [a for a in ap]
+            if len(action) > 1:
+                raise SettingsError(f'Action {action} is malformed')
+            action_list.append(action[0])
+            generator = generator or ap.contains_generator
+
+        if generator:
             task = TaskGenerator(*action_list)
-            return Plan(*[t for t in task])
+            print('generating tasks')
+            return Plan(*[t for t in task], setup_task=setup)
         else:
-            return Plan(Task(*action_list))
+            return Plan(Task(*action_list), setup_task=setup)
 
 
     def __str__(self):

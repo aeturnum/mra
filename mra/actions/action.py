@@ -1,6 +1,16 @@
 import asyncio
 from mra.durable_state import DurableState
 
+class TestException(Exception):
+    pass
+
+
+class EarlyExit(Exception):
+    def __init__(self, result:any, completed:bool=True):
+        # by default, we're going to consider this a success
+        super().__init__()
+        self.result = result
+        self.completed = completed
 
 class Action(DurableState):
     PATH = "Action"
