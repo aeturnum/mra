@@ -3,8 +3,8 @@ from logging import getLogger
 from mra.util import is_instance
 
 # Levels
-Log_LEVEL_SPEW = 0
-Log_LEVEL_SYSTEM = 1
+LOG_LEVEL_SPEW = 0
+LOG_LEVEL_SYSTEM = 1
 LOG_LEVEL_DEBUG = 2
 LOG_LEVEL_WARN = 3
 LOG_LEVEL_ERROR = 4
@@ -13,25 +13,27 @@ LOG_LEVEL_ERROR = 4
 LOG_LEVEL_REPORT = -1
 
 # global log level
-_Level = LOG_LEVEL_DEBUG
+_Level = LOG_LEVEL_SYSTEM
 
 
 class Logger(object):
     _depth_character = "  "
     _logger_name = ""
 
-    _l0 = Log_LEVEL_SPEW
-    _l1 = Log_LEVEL_SYSTEM
+    _l0 = LOG_LEVEL_SPEW
+    _l1 = LOG_LEVEL_SYSTEM
     _l2 = LOG_LEVEL_DEBUG
     _l3 = LOG_LEVEL_WARN
     _l4 = LOG_LEVEL_ERROR
 
     _tags = {
-        Log_LEVEL_SPEW: 'P',
-        Log_LEVEL_SYSTEM: 'S',
+        LOG_LEVEL_SPEW: 'P',
+        LOG_LEVEL_SYSTEM: 'S',
         LOG_LEVEL_DEBUG: 'D',
         LOG_LEVEL_WARN: 'W',
         LOG_LEVEL_ERROR: 'E',
+        # reports
+        LOG_LEVEL_REPORT: 'R'
     }
 
     _r = LOG_LEVEL_REPORT
@@ -64,7 +66,7 @@ class Logger(object):
             log_str = log_str.format(*args)
         else:
             log_str = str(log_str)
-        return f'{self._depth * self._depth_character}{self._tags[level]}|[{time_string}] {self}::{log_str}'
+        return f'{self._tags[level]}|{self._depth * self._depth_character}[{time_string}] {self}::{log_str}'
 
     def _log(self, level:int, log_str:any, *args):
         now = datetime.utcnow()
@@ -77,12 +79,13 @@ class Logger(object):
         }
 
         if level in [self._l0, self._l1, self._l2, self._l3, self._l4]:
+            if type(log['log']) is not str:
+                print(f'non-str log: {log["log"]}')
             self._logs.append(log)
         if level in [self._r]:
             self._reports.append(log)
 
         # if we have a parent, logs will be collected
-        print(log_str)
         if not self._parent:
             print(log_str)
             if level == self._l0:
@@ -123,8 +126,9 @@ class Logger(object):
             # raise TypeError(f'{other_logger} is not a logger!')
             return
 
-        if other_logger._parent is not None:
-            raise ValueError(f'{other_logger} already adopted!')
+        # if other_logger._parent is not None:
+        #     raise ValueError(f'{other_logger} already adopted!')
+
 
         other_logger._parent = self
         self._children.append(other_logger)
@@ -135,14 +139,12 @@ class Logger(object):
 
     def _get_logs(self):
         global _Level
-        print(f'_get_logs() _Level: {_Level}')
 
         all_logs = list(self._logs)
         for child in self._children:
             all_logs.extend(child._get_logs())
 
         all_logs.sort(key=self._log_sort)
-        print([log['level'] for log in all_logs])
         # remove logs "below" the level we care about
         return filter(lambda log: log['level'] >= _Level, all_logs)
 
@@ -158,4 +160,4 @@ class Logger(object):
         return "logger"
 
     def __repr__(self):
-        return self.__str__()
+        return f'{self.__class__}:{self.__str__()}'

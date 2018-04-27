@@ -17,7 +17,7 @@ class UpdatableDict(dict):
     def _variable_property(key, default=None):
 
         def getter(self):
-            self.get(key, default)
+            return self.get(key, default)
 
         def setter(self, v):
             setitem(self, key, v)
@@ -26,7 +26,7 @@ class UpdatableDict(dict):
             if key in self:
                 del self[key]
 
-        return property(itemgetter(key), setter, deleter)
+        return property(getter, setter, deleter)
 
     def update_and_check(self, info: dict):
         for key, value in info.items():

@@ -46,8 +46,10 @@ class ArgFromFile(ArgStandin):
     def __str__(self):
         return f'ArgFromFile({self.filename})'
 
+
+# TODO: Encorporate this functionality into the main action class - so it can be done without special objects
 class ActionStandin(DynamicModule):
-    PATH = 'GeneratedTask'
+    PATH = 'ActionStandin'
     def __init__(self, ActionClass, *args):
         super().__init__()
         # we're loading from settings
@@ -74,6 +76,9 @@ class ActionStandin(DynamicModule):
                 # insert this index
                 args.insert(pos, combo[idx])
             yield self.action(*args)
+
+    def __str__(self):
+        return f'ActionStandin({self.action})'
 
 
 # Behavaior for these classes is enforced in TaskGenerator
@@ -109,18 +114,17 @@ class TaskGenerator(DynamicModule):
 
     def __iter__(self) -> List[Task]:
         # first pass, find MultipleAction standins
-        print('finding multiactions')
         self._replace_multi_actions()
         generators = []
         positions = []
-        print('finding multitasks')
+        # print('finding special actions')
         for idx, action in enumerate(self.actions):
             if is_instance(action, ActionStandin):
+                # print(f'found: {action}')
                 generators.append(action)
                 positions.append(idx)
 
         for combo in itertools.product(*generators):
-            print(f'combo: {combo}')
             # copy list
             actions = list(self.actions)
             for idx, pos in enumerate(positions):

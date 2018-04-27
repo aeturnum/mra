@@ -30,12 +30,11 @@ class TimedTask(asyncio.Task):
 class Plan(object):
     PATH = "Plan"
     def __init__(self, *tasks, setup_task=None):
-        print(f"plan({tasks}, {setup_task})")
         self.tasks = list(tasks)
         self.setup = list(setup_task)
-        print(f"plan({tasks}, {setup_task}) done")
+        self.registry = {}
 
-    def run(self, print=True) -> List[TaskMeta]:
+    def run(self, print_result=True) -> List[TaskMeta]:
         loop = asyncio.get_event_loop()
         task_factory = lambda loop, coro: TimedTask(coro, loop=loop)
         loop.set_task_factory(task_factory)
@@ -43,10 +42,10 @@ class Plan(object):
 
         if self.setup:
             loop.run_until_complete(asyncio.gather(
-                *[t.run(False) for t in self.setup]
+                *[t.run(False, registry=self.registry) for t in self.setup]
             ))
         result = loop.run_until_complete(asyncio.gather(
-            *[t.run(print=print) for t in self.tasks]
+            *[t.run(print_result=print_result, registry=self.registry) for t in self.tasks]
         ))
         # loop.close()
         return result
@@ -221,7 +220,6 @@ class JobSpec(Settings):
         # ]
         # }
         # make a task
-        print('create_plan')
         setup = None
         if self.setup:
             setup = []
@@ -238,9 +236,10 @@ class JobSpec(Settings):
                 setup = TaskGenerator(*setup)
                 setup = [t for t in setup]
             else:
-                setup = Task(*setup)
+                # Todo: If this task is not placed in a list, calling list(Task Object) freezes forever.
+                # Todo: DEBUG THIS. It's insane and totally non-obvious behaviot
+                setup = [Task(*setup)]
 
-        print('setup done')
         generator = False
         action_list = []
         for action in self.actions:
@@ -254,7 +253,6 @@ class JobSpec(Settings):
 
         if generator:
             task = TaskGenerator(*action_list)
-            print('generating tasks')
             return Plan(*[t for t in task], setup_task=setup)
         else:
             return Plan(Task(*action_list), setup_task=setup)

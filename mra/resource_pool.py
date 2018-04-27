@@ -31,7 +31,7 @@ class ResourcePool(DynamicModule):
     def __exit__(self, *args):
         self.release()
 
-    async def acquire(self, attempt=False):
+    async def acquire(self, attempt=False) -> 'ResourcePool':
         await self._create_semaphore()
         self._resource = await self._allocate_resource(attempt)
         return self

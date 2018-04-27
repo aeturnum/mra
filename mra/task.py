@@ -1,3 +1,6 @@
+from typing import List
+import traceback
+
 from mra.durable_state import DurableState
 from mra.util import UpdatableDict, is_instance
 from mra.actions.action import EarlyExit
@@ -9,9 +12,24 @@ class TaskMeta(UpdatableDict):
     still_running = UpdatableDict._variable_property('still_running', True)
     result = UpdatableDict._variable_property('result')
     exception = UpdatableDict._variable_property('exception')
+    trace = UpdatableDict._variable_property('trace')
     last_action = UpdatableDict._variable_property('last_action')
-    logs = UpdatableDict._variable_property('logs', [])
-    reports = UpdatableDict._variable_property('reports', [])
+
+    @property
+    def logs(self) -> List[str]:
+        return self.get('logs', [])
+
+    @logs.setter
+    def logs(self, logs: List[dict]):
+        self['logs'] = [log['log'] for log in logs]
+
+    @property
+    def reports(self):
+        return self.get('reports', [])
+
+    @reports.setter
+    def reports(self, reports: List[dict]):
+        self['reports'] = [log['log'] for log in reports]
 
     def report(self):
         completed = 'completed'
@@ -31,6 +49,8 @@ class TaskMeta(UpdatableDict):
 
         log_lines = []
         if self.logs:
+            # for log in self.logs:
+            #     print(log)
             log_lines = [
                 '\tLogs:',
                 '\t{logs}'.format(logs='\n\t'.join(self.logs))
@@ -47,6 +67,12 @@ class TaskMeta(UpdatableDict):
         if log_lines:
             lines.extend(log_lines)
 
+        if self.trace:
+            lines.extend([
+                '\n\tTraceback:',
+                '{}'.format(self.trace)
+            ])
+
         return '\n'.join(lines)
 
 class Task(DurableState):
@@ -54,6 +80,7 @@ class Task(DurableState):
 
     def __init__(self, *actions):
         super().__init__()
+        self.registry = {}
         self.actions = list(actions)
         self.completed = []
         self.result = None
@@ -87,7 +114,7 @@ class Task(DurableState):
            'actions': [a.durable_id for a in self.actions]
         })
         for a in self.actions:
-            await a.setup()
+            await a.setup(self.registry)
             # start managing the loggers of the actions
             self._adopt(a)
         self.result = None
@@ -101,22 +128,27 @@ class Task(DurableState):
 
     async def advance(self) -> None:
         # execute current action
+        # print(f'advance(): {self.current}')
         await self.current.execute(self.result)
+        # print(f'advance(): {self.current} executed')
         # get result
         self.result = self.current.result
+        # print(f'advance(): {self.current} -> {self.result}')
         # update meta fields
         self.meta.last_action = self.current
         self.meta.exception = self.current.exception
+        self.meta.trace = self.current.trace
 
         # make sure action does any cleanup
         await self.current.is_done()
-
+        # print(f'advance(): {self.current} done')
         # move to done categories
         self.completed.append(self.actions.pop(0))
         self['done'].append(self['actions'].pop(0))
 
         # check if we need to perform more actions
         if self.meta.exception is not None:
+            # print(f'advance(): raised exception')
             # all exceptions mean we're done
             self.meta.still_running = False
             # assume this means it's failed
@@ -144,13 +176,22 @@ class Task(DurableState):
 
         return self.meta
 
-    async def run(self, print_result=True) -> TaskMeta:
+    async def run(self, print_result=True, registry=None) -> TaskMeta:
+        # note, this is why duck typing sucks.
+        # If you use the 'pythonic' line if registry:
+        # and registry is empty (but shared) than it won't trigger
+        # because it has no keys and is considered 'falsey'
+        if registry is not None:
+            self.registry = registry
         try:
             await self.setup()
             while not self.done:
                 await self.advance()
 
             await self.cleanup()
+        except Exception as e:
+            print("Exception report in task.run")
+            traceback.print_exc()
         finally:
             return await self.report(print_result)
 
