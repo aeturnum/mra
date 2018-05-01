@@ -16,7 +16,9 @@ def main(args=None):
     s = Settings.load_from_file()
     DynamicModuleManager.gather(s)
     for job in JobSpec.load_directory(s, os.getcwd()):
+        print('creating plan')
         plan = job.create_plan()
+        print('running plan')
         plan.run()
 
 

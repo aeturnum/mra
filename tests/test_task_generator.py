@@ -1,11 +1,7 @@
 import unittest
 
-from mra.management import Plan
-from mra.task import Task
-from mra.actions.simple_actions import Get, JsonCheck
-from mra.task_generator import ArgFromList, ActionStandin, TaskGenerator, MultipleActions, MultipleTasks
-
 from base_test import BaseTest, TestAction
+from mra.actions.task_generator import ArgFromList, ActionStandin, TaskGenerator, MultipleActions, MultipleTasks
 
 
 class TaskGeneratorTest(BaseTest):

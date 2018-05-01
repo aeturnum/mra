@@ -76,7 +76,7 @@ class DynamicModuleManager(object):
         try:
             spec.loader.exec_module(module)
         except SyntaxError:
-            print(f'File {path} contains a syntax error - skipping')
+            print(f'File {path} contains a syntax log_error - skipping')
             # exit with a bad code if we're being called in a process
             if test_process:
                 exit(1)

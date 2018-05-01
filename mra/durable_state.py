@@ -1,5 +1,6 @@
 import aiosqlite
 import jsonpickle
+import copy
 
 from mra.dynamic_module import DynamicModule
 from mra.logger import Logger
@@ -30,7 +31,7 @@ class DBDict(dict, Logger):
         if args is None:
             args = []
 
-        self._spew('statement: {}, args: {}', statement, args)
+        self.log_spew('statement: {}, args: {}', statement, args)
         return await db.execute(statement, args)
 
     @property
@@ -59,38 +60,43 @@ class DBDict(dict, Logger):
 
     # returns dbid
     async def _create(self, db: aiosqlite.Connection) -> int:
-        cursor = await self._execute(db, self._create_state_query, [self['type'], self.str_state])
-        await db.commit()
-        self.db_id = cursor.lastrowid
         self._loaded = True
-        return self.db_id
+        return 0
+        # cursor = await self._execute(db, self._create_state_query, [self['type'], self.str_state])
+        # await db.commit()
+        # self.db_id = cursor.lastrowid
+        # self._loaded = True
+        # return self.db_id
 
     async def _load(self, db: aiosqlite.Connection) -> None:
-        cursor = await self._execute(db, self._load_state_query.format(db_id=self.db_id))
-        if cursor.rowcount != -1:
-            print(cursor.rowcount)
-            raise DBError("Somehow there's a duplicate row, burn it all down.")
-        row = await cursor.fetchone()
-        if row is None:
-            raise DBError("ID does not exist")
-        # (id, type, state)
-        saved_item = jsonpickle.loads(row[2])
-        for key, item in saved_item.items():
-            self[key] = item
         self._loaded = True
+        pass
+        # cursor = await self._execute(db, self._load_state_query.format(db_id=self.db_id))
+        # if cursor.rowcount != -1:
+        #     print(cursor.rowcount)
+        #     raise DBError("Somehow there's a duplicate row, burn it all down.")
+        # row = await cursor.fetchone()
+        # if row is None:
+        #     raise DBError("ID does not exist")
+        # # (id, type, state)
+        # saved_item = jsonpickle.loads(row[2])
+        # for key, item in saved_item.items():
+        #     self[key] = item
+        # self._loaded = True
 
     async def _update(self, db: aiosqlite.Connection) -> None:
-        await self._execute(db, self._update_state_query.format(db_id=self.db_id), [self.str_state])
-        await db.commit()
+        pass
+        # await self._execute(db, self._update_state_query.format(db_id=self.db_id), [self.str_state])
+        # await db.commit()
 
     async def _delete(self, db: aiosqlite.Connection) -> None:
-        await self._execute(db, self._delete_state_query.format(db_id=self.db_id))
-        await db.commit()
+        pass
+        # await self._execute(db, self._delete_state_query.format(db_id=self.db_id))
+        # await db.commit()
 
     def copy(self) -> 'DBDict':
         new_dbd = DBDict(self, self.db_id)
-        new_dbd._parent = self._parent
-        new_dbd._children = self._children
+        new_dbd._lh = copy.copy(self._lh)
         return new_dbd
 
     def dict(self) -> dict:

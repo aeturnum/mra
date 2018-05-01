@@ -8,14 +8,13 @@ class Get(Action):
     PREFIX = 'Action.Simple'
     PATH = "Action.Simple.Get"
 
-    def __init__(self, url):
-        super().__init__()
+    def _create(self, url):
         self.url = url
 
     async def actions(self, previous):
         with await HTTPPool().acquire() as pool:
             result = await pool.get(self.url)
-            self._report('Sent a GET request to {} and received {}', self.url, result.content_type)
+            self.log_report('Sent a GET request to {} and received {}', self.url, result.content_type)
             if result.content_type == 'application/json':
                 return await result.json()
 
@@ -25,8 +24,7 @@ class DictCheck(Action):
     PREFIX = 'Action.Simple.Checks'
     PATH = "Action.Simple.Checks.Dictionary"
 
-    def __init__(self, match_dict, partial=True):
-        super().__init__()
+    def _create(self, match_dict, partial=True):
         self.match_dict = match_dict
         self.partial = partial
 
@@ -47,14 +45,14 @@ class DictCheck(Action):
                 if key not in self.match_dict:
                     raise TestException(f'Found unexpected key "{key}" in {previous}')
 
-        self._report('Previous result as expected')
+        self.log_report('Previous result as expected')
         return previous
 
 class JsonCheck(DictCheck):
     PREFIX = 'Action.Simple.Checks'
     PATH = "Action.Simple.Checks.Json"
 
-    def __init__(self, match_dict:str or dict, partial=True):
+    def _create(self, match_dict: str or dict, partial=True):
         if type(match_dict) is str:
             match_dict = load_json(match_dict)
 

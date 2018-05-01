@@ -52,7 +52,7 @@ class TaskMeta(UpdatableDict):
             # for log in self.logs:
             #     print(log)
             log_lines = [
-                '\tLogs:',
+                '\n\tLogs:',
                 '\t{logs}'.format(logs='\n\t'.join(self.logs))
             ]
 
@@ -68,9 +68,9 @@ class TaskMeta(UpdatableDict):
             lines.extend(log_lines)
 
         if self.trace:
+            trace = self.trace.split('\n')
             lines.extend([
-                '\n\tTraceback:',
-                '{}'.format(self.trace)
+                '\n\t' + '\n\t'.join(trace)
             ])
 
         return '\n'.join(lines)
@@ -89,7 +89,9 @@ class Task(DurableState):
 
     @property
     def current(self):
-        return self.actions[0]
+        if len(self.actions) > 0:
+            return self.actions[0]
+        return None
 
     @property
     def next(self):
@@ -128,9 +130,9 @@ class Task(DurableState):
 
     async def advance(self) -> None:
         # execute current action
-        # print(f'advance(): {self.current}')
+        print(f'advance(): {self.current}')
         await self.current.execute(self.result)
-        # print(f'advance(): {self.current} executed')
+        print(f'advance(): {self.current} executed')
         # get result
         self.result = self.current.result
         # print(f'advance(): {self.current} -> {self.result}')
@@ -169,8 +171,8 @@ class Task(DurableState):
             self.meta.still_running = False
 
     async def report(self, should_print) -> TaskMeta:
-        self.meta.logs = self._get_logs()
-        self.meta.reports = self._get_reports()
+        self.meta.logs = self._lh.get_logs()
+        self.meta.reports = self._lh.get_reports()
         if should_print:
             print(self.meta.report())
 
@@ -190,7 +192,7 @@ class Task(DurableState):
 
             await self.cleanup()
         except Exception as e:
-            print("Exception report in task.run")
+            print("Exception log_report in task.run")
             traceback.print_exc()
         finally:
             return await self.report(print_result)

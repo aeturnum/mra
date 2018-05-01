@@ -1,25 +1,119 @@
 import asyncio
 import traceback
+import itertools
 
+from mra.dynamic_module import DynamicModule
 from mra.durable_state import DurableState
+from mra.logger import Logger
+from mra.util import is_instance
+
+class ArgStandin(DynamicModule):
+    PATH = 'GeneratedArg'
+
+    def generate(self):
+        return None
+
 
 class TestException(Exception):
     pass
 
 
 class EarlyExit(Exception):
-    def __init__(self, result:any=False, completed:bool=False):
+    def __init__(self, result: any=False, completed: bool=False):
         # by default, we're going to consider this a success
         super().__init__()
         self.result = result
         self.completed = completed
 
+class GeneratorArg(object):
+    _arg = 'arg'
+    _kwarg = 'kwarg'
+
+
+    class GenResult(object):
+        __slots__ = ['generator', 'args', 'kwargs', 'gens']
+        def __init__(self, generator, args, kwargs, gens):
+            self.generator = generator
+            self.args = args
+            self.kwargs = kwargs
+            self. gens = gens
+
+
+    @classmethod
+    def from_args_kwargs(cls, *args, **kwargs):
+        result = cls.GenResult(False, list(args), dict(kwargs), [])
+        for idx, arg in enumerate(args):
+            if is_instance(arg, ArgStandin):
+                result.gens.append(GeneratorArg(arg, arg_pos=idx))
+                result.generator = True
+
+        for key, arg in kwargs.items():
+            if is_instance(arg, ArgStandin):
+                result.gens.append(GeneratorArg(arg, kwarg_key=key))
+                result.generator = True
+
+        return result
+
+    @classmethod
+    def arg_loop(cls, info: GenResult):
+        # lul
+        generators = [gen.gen for gen in info.gens]
+
+        for combo in itertools.product(*generators):
+            args = list(info.args)
+            kwargs = list(info.kwargs)
+            for idx, value in enumerate(combo):
+                # position info
+                pos_info = info.gens[idx]
+
+                if pos_info.type == cls._arg:
+                    # pop this standin
+                    args.pop(pos_info.pos)
+                    # insert this index
+                    args.insert(pos_info.pos, value)
+                if pos_info.type == cls._kwarg:
+                    # in this case .pos stores the key
+                    kwargs[pos_info.pos] = value
+
+            yield args, kwargs
+
+    def __init__(self, gen, arg_pos=None, kwarg_key=None):
+        if arg_pos is None and kwarg_key is None or \
+            arg_pos is not None and kwarg_key is not None:
+            raise ValueError("GeneratorArg must have either an arg position or kwarg_key, but not both.")
+
+        self.gen = gen
+        if arg_pos is not None:
+            self.type = self._arg
+            self.pos = arg_pos
+        if kwarg_key is not None:
+            self.type = self._kwarg
+            self.pos = kwarg_key
+
+
+
 class Action(DurableState):
     PATH = "Action"
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         super().__init__(0)
+        self._info = GeneratorArg.from_args_kwargs(*args, **kwargs)
+
         self.registry = {}
+        if not self.generator:
+            self._create(*args, **kwargs)
+
+    @property
+    def generator(self):
+        return self._info.generator
+
+    def _create(self, *args, **kwargs):
+        pass
+
+    def __iter__(self):
+        for args, kwargs in GeneratorArg.arg_loop(self._info):
+            # will NOT contain generator classes
+            yield self.__class__(*args, *kwargs)
 
     async def setup(self, registry=None):
         await super().setup()
@@ -60,9 +154,8 @@ class Action(DurableState):
         # oldschool
         setattr(self, '_exception', value)
 
-
     async def run_segment(self, label, func):
-        self._spew('run_segment({}, {})', label, func)
+        self.log_spew('run_segment({}, {})', label, func)
         loop = asyncio.get_event_loop()
 
         task = loop.create_task(func)
@@ -84,6 +177,10 @@ class Action(DurableState):
             # cancel coro because we don't know how to deal with it
             loop.create_task(result).cancel()
             result = None
+
+        if is_instance(result, Logger):
+            self._adopt(result)
+
         state_update = {label: {
             'duration': task.cputime if hasattr(task, 'cputime') else 0,
             'result': result,
@@ -91,7 +188,7 @@ class Action(DurableState):
             # Could save the exception in the state, but I don't think they can be pickled reliably
             # 'exception': exception
         }}
-        self._system(state_update)
+        self.log_system(state_update)
         await self.update(state_update)
         if exception:
             self.exception = exception
@@ -107,7 +204,7 @@ class Action(DurableState):
         for seg in segments:
             await self.run_segment(seg[0], seg[1](previous))
             if self.exception is not None:
-                self._error(f"Segment {seg[0]} raised an exception: {self.exception}")
+                self.log_error(f"Segment {seg[0]} raised an exception: {self.exception}")
                 break
 
     async def before(self, previous):

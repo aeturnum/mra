@@ -1,16 +1,16 @@
 import asyncio
 import time
 import os
-import re
-import ast
+import itertools
+from copy import deepcopy
 from typing import List
 
 from mra.task import TaskMeta, Task
-from mra.task_generator import (
-    TaskGenerator,
-    ArgStandin,
-    ActionStandin,
-)
+# from mra.task_generator import (
+#     TaskGenerator,
+#     ArgStandin,
+#     ActionStandin,
+# )
 from mra.settings import Settings, SettingsError
 from mra.util import load_json, is_instance
 from mra.dynamic_module import DynamicModuleManager
@@ -52,16 +52,12 @@ class Plan(object):
 
 
 # why do I always do this to myself?
+# TODO: Add support for kwargs
 class ArgParser(object):
     _seps = ('(', ',')
-    _special_classes = (
-        ArgStandin,
-        ActionStandin,
-    )
 
     def __init__(self, arg_str: str):
         self.args = arg_str
-        self.contains_generator = False
 
     def _edge_trim(self, s: str, ends:str):
         if s[0] == ends[0] and s[-1] == ends[-1]:
@@ -89,9 +85,8 @@ class ArgParser(object):
             return self._process_arg(arg)
 
         sub_ap = ArgParser(inner_args)
-        action = cls(*[a for a in sub_ap])
-        if is_instance(action, self._special_classes) or sub_ap.contains_generator:
-            self.contains_generator = True
+        sub_ap = [a for a in sub_ap]
+        action = cls(*sub_ap)
 
         return action
 
@@ -174,13 +169,6 @@ class JobSpec(Settings):
     _actions_key = 'actions'
     _setup_key = 'setup'
 
-    _dsl_re = '([^\()]+)\(([^\)]*)\)'
-
-    _special_classes = (
-        ArgStandin,
-        ActionStandin,
-    )
-
     @staticmethod
     def load_directory(settings, path=None):
         if path is None:
@@ -210,6 +198,41 @@ class JobSpec(Settings):
     def setup(self):
         return self.get(self._setup_key, [])
 
+    def _process_actions(self, action_strings):
+        created_actions = []
+        generators = []
+        positions = []
+
+        for idx, astr in enumerate(action_strings):
+            ap = ArgParser(astr)
+            # should do better than this
+            action = [a for a in ap]
+            if len(action) > 1:
+                raise SettingsError(f'Action {action} is malformed')
+
+            action = action[0]
+
+            if action.generator:
+                # print(f'found: {action}')
+                generators.append(action)
+                positions.append(idx)
+
+            created_actions.append(action)
+
+        tasks = []
+        for combo in itertools.product(*generators):
+            # copy list
+            actions = [deepcopy(action) for action in created_actions]
+            for idx, pos in enumerate(positions):
+                # pop this standin
+                actions.pop(pos)
+                # insert this index
+                actions.insert(pos, combo[idx])
+
+            tasks.append(Task(*actions))
+
+        return tasks
+
     def create_plan(self) -> Plan:
         # {
         #     "title": "test",
@@ -220,42 +243,13 @@ class JobSpec(Settings):
         # ]
         # }
         # make a task
-        setup = None
-        if self.setup:
-            setup = []
-            generator = False
-            for action in self.setup:
-                ap = ArgParser(action)
-                # todo: god help me, fix this
-                action = [a for a in ap]
-                if len(action) > 1:
-                    raise SettingsError(f'Action {action} is malformed')
-                setup.append(action[0])
-                generator = generator or ap.contains_generator
-            if generator:
-                setup = TaskGenerator(*setup)
-                setup = [t for t in setup]
-            else:
-                # Todo: If this task is not placed in a list, calling list(Task Object) freezes forever.
-                # Todo: DEBUG THIS. It's insane and totally non-obvious behaviot
-                setup = [Task(*setup)]
+        setup = self._process_actions(self.setup)
+        if len(setup) > 1:
+            raise Exception("Cannot have more than one task in setup!")
 
-        generator = False
-        action_list = []
-        for action in self.actions:
-            ap = ArgParser(action)
-            # todo: god help me, fix this
-            action = [a for a in ap]
-            if len(action) > 1:
-                raise SettingsError(f'Action {action} is malformed')
-            action_list.append(action[0])
-            generator = generator or ap.contains_generator
+        tasks = self._process_actions(self.actions)
 
-        if generator:
-            task = TaskGenerator(*action_list)
-            return Plan(*[t for t in task], setup_task=setup)
-        else:
-            return Plan(Task(*action_list), setup_task=setup)
+        return Plan(*tasks, setup_task=setup)
 
 
     def __str__(self):

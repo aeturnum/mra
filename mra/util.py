@@ -31,7 +31,10 @@ class UpdatableDict(dict):
     def update_and_check(self, info: dict):
         for key, value in info.items():
             if key not in self or self.get(key) == None:
-                setitem(self, key, value)
+                if hasattr(self, key):
+                    setattr(self, key, value)
+                else:
+                    setitem(self, key, value)
             else:
                 if not verbose_equals(self[key], value):
                     raise Exception(
@@ -68,7 +71,7 @@ def load_json(json_string:str):
     try:
         j = json.loads(json_string)
     except (json.JSONDecodeError, TypeError):
-        # don't catch this error if it happens
+        # don't catch this log_error if it happens
         j = json5.loads(json_string)
 
     return j

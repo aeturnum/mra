@@ -18,7 +18,7 @@ class HTTPPool(ResourcePool):
 
     def __init__(self):
         super().__init__()
-        self._print_request = True
+        self._print_request = False
 
     @classmethod
     async def _create_global_values(cls):
