@@ -4,7 +4,7 @@ from distutils.core import setup
 from setuptools import find_packages
 
 setup(name='mra',
-      version='0.0.2',
+      version='0.0.3',
       description='Minimalist RESTful Automation framework. Built for expandability and minimal configuration.',
       author='Drex',
       author_email='aeturnum@gmail.com',
