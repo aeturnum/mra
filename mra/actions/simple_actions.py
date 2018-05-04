@@ -1,8 +1,20 @@
-
-from mra.util import load_json
-from mra.actions.action import Action, TestException, EarlyExit
+from mra.actions.action import Action, TestException
+from mra.helpers.util import load_json
 from mra.http_pool import HTTPPool
+from mra.task import TaskHandle
 
+
+class SetTitle(Action):
+    PREFIX = 'Action.Meta'
+    PATH = "Action.Meta.SetTitle"
+
+    def _create(self, title):
+        self.title = title
+
+    async def actions(self, task_handle: TaskHandle, previous):
+        task_handle.set_title(self.title)
+
+        return self.title
 
 class Get(Action):
     PREFIX = 'Action.Simple'
@@ -11,7 +23,7 @@ class Get(Action):
     def _create(self, url):
         self.url = url
 
-    async def actions(self, previous):
+    async def actions(self, task_handle, previous):
         with await HTTPPool().acquire() as pool:
             result = await pool.get(self.url)
             self.log_report('Sent a GET request to {} and received {}', self.url, result.content_type)
@@ -28,7 +40,7 @@ class DictCheck(Action):
         self.match_dict = match_dict
         self.partial = partial
 
-    async def actions(self, previous: any) -> any:
+    async def actions(self, task_handle, previous: any) -> any:
         if not isinstance(previous, dict):
             raise TestException(f'Previous product a {type(previous)} not a dict!')
 
@@ -59,7 +71,7 @@ class JsonCheck(DictCheck):
         super().__init__(match_dict, partial)
 
 
-    async def actions(self, previous: any) -> any:
+    async def actions(self, task_handle, previous: any) -> any:
         if type(previous) is str:
             previous = load_json(previous)
 
@@ -68,6 +80,3 @@ class JsonCheck(DictCheck):
         else:
             raise TypeError(f'JsonCheck expects JSON, got {type(previous)}')
 
-class Check(DictCheck):
-    PREFIX = 'Action.Simple.Checks'
-    PATH = "Action.Simple.Check"

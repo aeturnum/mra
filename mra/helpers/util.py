@@ -1,6 +1,8 @@
 import json
 import json5
 import collections
+from json import JSONDecodeError
+from pathlib import Path
 
 from operator import itemgetter, setitem
 
@@ -65,6 +67,26 @@ def verbose_equals(a:dict, b:dict):
 
 def mod_path(*args):
     return '.'.join(args)
+
+def load_json_file(path:str):
+    result = None
+
+    path = Path(path)
+
+    if not path.exists():
+        print(f'Path "{path}" does not exist.')
+
+    if not path.is_file():
+        print(f'Path "{path}" is not a file.')
+
+    j_string = open(path).read()
+
+    try:
+        result = load_json(j_string)
+    except ValueError as e:
+        print(f'File {path} contained invalid JSON: {e}')
+
+    return result
 
 def load_json(json_string:str):
     j = None

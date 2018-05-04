@@ -1,11 +1,12 @@
 import asyncio
-import traceback
 import itertools
+import traceback
 
-from mra.dynamic_module import DynamicModule
 from mra.durable_state import DurableState
-from mra.logger import Logger
-from mra.util import is_instance
+from mra.dynamic_module import DynamicModule
+from mra.helpers.logger import Logger
+from mra.helpers.util import is_instance
+
 
 class ArgStandin(DynamicModule):
     PATH = 'GeneratedArg'
@@ -89,7 +90,6 @@ class GeneratorArg(object):
         if kwarg_key is not None:
             self.type = self._kwarg
             self.pos = kwarg_key
-
 
 
 class Action(DurableState):
@@ -194,7 +194,7 @@ class Action(DurableState):
             self.exception = exception
             self.trace = trace
 
-    async def execute(self, previous):
+    async def execute(self, task_handle, previous):
         segments = [
             ('before', self.before),
             ('actions', self.actions),
@@ -202,18 +202,18 @@ class Action(DurableState):
         ]
 
         for seg in segments:
-            await self.run_segment(seg[0], seg[1](previous))
+            await self.run_segment(seg[0], seg[1](task_handle, previous))
             if self.exception is not None:
                 self.log_error(f"Segment {seg[0]} raised an exception: {self.exception}")
                 break
 
-    async def before(self, previous):
+    async def before(self, task_handle, previous):
         pass
 
-    async def actions(self, previous):
+    async def actions(self, task_handle, previous):
         pass
 
-    async def after(self, previous):
+    async def after(self, task_handle, previous):
         pass
 
     async def ready(self):

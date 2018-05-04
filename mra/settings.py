@@ -1,5 +1,7 @@
-from mra.util import load_json
-from mra.logger import Logger
+from pathlib import Path
+
+from mra.helpers.logger import Logger
+from mra.helpers.util import load_json
 
 _default_file = './settings.json'
 
@@ -13,7 +15,12 @@ class Settings(Logger):
             global _default_file
             path = _default_file
 
-        settings_data = load_json(open(path).read())
+        path = Path(path)
+        settings_data = {}
+
+        if path.exists() and path.is_file():
+            settings_data = load_json(open(path).read())
+
         return Settings(settings_data, path)
 
     def __init__(self, data = None, path=None):

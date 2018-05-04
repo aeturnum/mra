@@ -1,11 +1,10 @@
 import unittest
 
-from mra.dynamic_module import DynamicModuleManager
-from mra.management import ArgParser
-from mra.actions.simple_actions import Get
-from mra.util import is_instance
-
 from base_test import BaseTest
+from mra.actions.simple_actions import Get
+from mra.dynamic_module import DynamicModuleManager
+from mra.helpers.util import is_instance
+from mra.management import ArgParser
 
 
 class ArgParseTest(BaseTest):

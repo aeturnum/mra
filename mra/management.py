@@ -1,19 +1,17 @@
 import asyncio
-import time
-import os
 import itertools
+import os
+import time
 from copy import deepcopy
 from typing import List
 
-from mra.task import TaskMeta, Task
-# from mra.task_generator import (
-#     TaskGenerator,
-#     ArgStandin,
-#     ActionStandin,
-# )
-from mra.settings import Settings, SettingsError
-from mra.util import load_json, is_instance
+from mra.display.display_layer import DisplayLayer
 from mra.dynamic_module import DynamicModuleManager
+from mra.helpers.logger import Logger
+from mra.helpers.parser import ArgParser
+from mra.helpers.util import load_json_file
+from mra.settings import Settings, SettingsError
+from mra.task import TaskMeta, Task
 
 _default_directory = './'
 
@@ -27,142 +25,56 @@ class TimedTask(asyncio.Task):
         self.cputime += time.time() - start
         return result
 
+
+class MRAManager(Logger):
+    def __init__(self, args):
+        super().__init__()
+        self.args = args
+        self.settings = Settings.load_from_file()
+        self.loop = asyncio.get_event_loop()
+        self.display_layer = DisplayLayer(self.settings)
+        self._setup()
+
+    @staticmethod
+    def _task_factory(loop, coro):
+        return TimedTask(coro, loop=loop)
+
+    def _setup(self):
+        self.loop.set_task_factory(self._task_factory)
+
+    def run(self):
+
+        DynamicModuleManager.gather(self.settings)
+        js = JobSpec.load_directory(self.settings, self.display_layer, os.getcwd())
+
+        jobs = [job for job in js]
+
+        plans = [job.create_plan() for job in jobs]
+
+        self.loop.run_until_complete(asyncio.gather(
+            *[plan.run(self.display_layer) for plan in plans]
+        ))
+
+        self.display_layer.print_reports()
+
 class Plan(object):
     PATH = "Plan"
     def __init__(self, *tasks, setup_task=None):
         self.tasks = list(tasks)
-        self.setup = list(setup_task)
+        self.setup = []
+        if setup_task is not None:
+            self.setup = list(setup_task)
         self.registry = {}
 
-    def run(self, print_result=True) -> List[TaskMeta]:
-        loop = asyncio.get_event_loop()
-        task_factory = lambda loop, coro: TimedTask(coro, loop=loop)
-        loop.set_task_factory(task_factory)
-        # setup queue
+    async def run(self, display_layer: DisplayLayer) -> List[TaskMeta]:
+        for t in self.setup:
+            await t.run(registry=self.registry)
 
-        if self.setup:
-            loop.run_until_complete(asyncio.gather(
-                *[t.run(False, registry=self.registry) for t in self.setup]
-            ))
-        result = loop.run_until_complete(asyncio.gather(
-            *[t.run(print_result=print_result, registry=self.registry) for t in self.tasks]
-        ))
-        # loop.close()
+        result =  await asyncio.gather(
+            *[t.run(registry=self.registry) for t in self.tasks]
+        )
         return result
 
-
-# why do I always do this to myself?
-# TODO: Add support for kwargs
-class ArgParser(object):
-    _seps = ('(', ',')
-
-    def __init__(self, arg_str: str):
-        self.args = arg_str
-
-    def _edge_trim(self, s: str, ends:str):
-        if s[0] == ends[0] and s[-1] == ends[-1]:
-            s = s[1:-1]
-
-        return s
-
-    @staticmethod
-    def _convert(arg, converter):
-        if type(arg) is str:
-            try:
-                arg = converter(arg)
-            except ValueError:
-                pass
-        return arg
-
-    def _process_call(self, arg: str):
-        arg = arg.strip()
-        loc = arg.find('(')
-        name, inner_args = arg[:loc], arg[loc:]
-        try:
-            cls = DynamicModuleManager.LoadClass(name)
-        except SettingsError:
-            # treat it as a string literal
-            return self._process_arg(arg)
-
-        sub_ap = ArgParser(inner_args)
-        sub_ap = [a for a in sub_ap]
-        action = cls(*sub_ap)
-
-        return action
-
-
-    def _process_arg(self, arg: str):
-        arg = arg.strip()
-        arg = self._convert(arg, int)
-        arg = self._convert(arg, float)
-        # normalize strings
-        if type(arg) is str:
-            # strip quotes and escapes
-            arg = arg.strip('\'"\\')
-
-        return arg
-
-    def _next_sep(self, s: str):
-        min = [None]
-        distance = [(sep, s.find(sep)) for sep in self._seps]
-        for d in distance:
-            # not found
-            if d[1] == -1:
-                continue
-
-            if min[0] is None:
-                min = d
-            if d[1] < min[1]:
-                min = d
-
-        return min[0]
-
-    def _match_parens(self, s: str):
-        parens = []
-        for idx, c in enumerate(s):
-            if c == '(':
-                parens.append('(')
-            if c == ')':
-                if len(parens) == 0:
-                    raise Exception(f"Something has gone wrong parsing {s}")
-                parens.pop()
-                if len(parens) == 0:
-                    return idx + 1
-
-        raise Exception(f"Unmatched parens in {s}")
-
-    def __iter__(self):
-        args = self.args.strip()  # whitespace
-        args = self._edge_trim(args, '()')
-
-        # are you ready for amateur parsing code?
-        while True:
-            # we don't care about white space
-            args = args.strip()
-
-            if args == '':
-                # done
-                break
-
-            # can be left after parsing an object
-            if args[0] == ',':
-                args = args[1:]
-
-            sep = self._next_sep(args)
-            if sep == '(':
-                # open paren before a comma. We need to count open / close parens
-                idx = self._match_parens(args)
-                arg, args = args[:idx], args[idx:]
-                yield self._process_call(arg)
-            elif sep == ',':
-                # comma before paren. Easy case
-                arg, args = args.split(',', 1)
-                yield self._process_arg(arg)
-            elif sep == None:
-                yield self._process_arg(args)
-                break
-            else:
-                raise Exception(f"huh?: {args}")
 
 class JobSpec(Settings):
     _title_key = 'title'
@@ -170,7 +82,7 @@ class JobSpec(Settings):
     _setup_key = 'setup'
 
     @staticmethod
-    def load_directory(settings, path=None):
+    def load_directory(settings, display_layer, path=None):
         if path is None:
             path = _default_directory
 
@@ -178,16 +90,15 @@ class JobSpec(Settings):
             # todo: skip settings file
             name, ext = os.path.splitext(entry)
             if '.json' in ext and name.startswith('job_'):
-                # we got one
-                f = open(os.path.join(path, entry))
-                job = load_json(f.read())
-                f.close()
-                yield JobSpec(settings, job, entry)
+                job = load_json_file(entry)
+                if job is not None:
+                    yield JobSpec(settings, display_layer, job, entry)
 
-    def __init__(self, settings, job_data, filename):
+    def __init__(self, settings, display_layer, job_data, filename):
         # todo: put data into settings?
         super().__init__(job_data, filename)
         self.settings = settings
+        self.display_layer = display_layer
         self.generator = False
 
     @property
@@ -198,7 +109,7 @@ class JobSpec(Settings):
     def setup(self):
         return self.get(self._setup_key, [])
 
-    def _process_actions(self, action_strings):
+    def _process_actions(self, action_strings: list, setup: bool=False):
         created_actions = []
         generators = []
         positions = []
@@ -229,7 +140,9 @@ class JobSpec(Settings):
                 # insert this index
                 actions.insert(pos, combo[idx])
 
-            tasks.append(Task(*actions))
+            tasks.append(
+                Task(*actions, tracker=self.display_layer.task_tracker(setup))
+            )
 
         return tasks
 
@@ -243,11 +156,11 @@ class JobSpec(Settings):
         # ]
         # }
         # make a task
-        setup = self._process_actions(self.setup)
+        setup = self._process_actions(self.setup, True)
         if len(setup) > 1:
             raise Exception("Cannot have more than one task in setup!")
 
-        tasks = self._process_actions(self.actions)
+        tasks = self._process_actions(self.actions, False)
 
         return Plan(*tasks, setup_task=setup)
 

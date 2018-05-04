@@ -1,11 +1,9 @@
-import aiosqlite
-import jsonpickle
 import copy
 
+import aiosqlite
+import jsonpickle
 from mra.dynamic_module import DynamicModule
-from mra.logger import Logger
-
-import json
+from mra.helpers.logger import Logger
 
 SQLITE_DATABASE_NAME = 'SQLITE_DATABASE_NAME'
 _DEFAULT_DB_NAME = 'task_state.db'

@@ -1,12 +1,12 @@
 import importlib.util
 import inspect
-from os.path import split, basename, join
+import multiprocessing
 import os
 import sys
-import multiprocessing
+from os.path import split, basename, join
 
+from mra.helpers.logger import Logger
 from mra.settings import Settings, SettingsError
-from mra.logger import Logger
 
 # global registry
 Registry = {}

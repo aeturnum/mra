@@ -1,6 +1,7 @@
 from datetime import datetime
 from logging import getLogger
-from mra.util import is_instance
+
+from mra.helpers.util import is_instance
 
 # Levels
 LOG_LEVEL_SPEW = 0

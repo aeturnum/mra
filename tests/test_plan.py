@@ -39,7 +39,7 @@ class PlanTest(BaseTest):
 
     def test_bad_test(self):
         class BadGet(Get):
-            async def actions(self, previous):
+            async def actions(self, task_handle, previous):
                 return super().actions(previous)
 
         # broken test
