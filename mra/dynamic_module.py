@@ -39,7 +39,7 @@ _DEFAULT_PREFIXES = (
 )
 
 # this can probably be a *lot* lower
-_DRY_RUN_TIMEOUT = 0.5
+_DRY_RUN_TIMEOUT = 5
 
 # modified at runtime
 
