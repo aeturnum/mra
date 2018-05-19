@@ -4,17 +4,26 @@ from logging import getLogger
 from mra.helpers.util import is_instance
 
 # Levels
+# Literally every action that takes place.
+# Good for contextualizing crashes and getting a full overview
 LOG_LEVEL_SPEW = 0
+# Logs that illustrate how the system is progressing, but which will likely not matter
+# if everything works.
 LOG_LEVEL_SYSTEM = 1
+# Logs that give very particular information about the system that will help someone understand
+# a successful run
 LOG_LEVEL_DEBUG = 2
+# Warnings that don't stop execution, but that should probably be checked
 LOG_LEVEL_WARN = 3
+# Explain why execution was stopped.
 LOG_LEVEL_ERROR = 4
 
 # non-log
+# Log output of actions
 LOG_LEVEL_REPORT = -1
 
 # global log level
-_Level = LOG_LEVEL_DEBUG
+_Log_Level = LOG_LEVEL_DEBUG
 
 # Class exists to move a lot of constants out of the namespace of loggers
 class LoggerHelper(object):
@@ -38,8 +47,9 @@ class LoggerHelper(object):
 
     r = LOG_LEVEL_REPORT
 
-    def __init__(self):
+    def __init__(self, reporter: bool=False):
         self._depth = 0
+        self.reporter = reporter
         self.parent = None
         self.children = []
         # log_error logs
@@ -90,15 +100,13 @@ class LoggerHelper(object):
         return a['time']
 
     def get_logs(self):
-        global _Level
-
         all_logs = list(self.log_lines)
         for child in self.children:
             all_logs.extend(child.get_logs())
 
         all_logs.sort(key=self._log_sort)
         # remove logs "below" the level we care about
-        return filter(lambda log: log['level'] >= _Level, all_logs)
+        return filter(lambda log: log['level'] >= _Log_Level, all_logs)
 
     def get_reports(self):
         all_reports = list(self.report_lines)
@@ -111,8 +119,8 @@ class LoggerHelper(object):
 class Logger(object):
     _logger_name = ""
 
-    def __init__(self):
-        self._lh = LoggerHelper()
+    def __init__(self, reporter: bool=False):
+        self._lh = LoggerHelper(reporter=reporter)
         self._logger = getLogger(self._logger_name)
 
     def _build_final_string(self, level: int, now: datetime, log_str: any, *args) -> str:
@@ -141,8 +149,8 @@ class Logger(object):
             self._lh.report_lines.append(log)
 
         # if we have a parent, logs will be collected
-        if not self._lh.parent:
-            print(log_str)
+        if not self._lh.parent and not self._lh.reporter:
+            print(f'{self} no parent / reporter: {log_str}')
             if level == self._lh.l2:
                 self._logger.debug(log_str)
             if level == self._lh.l3:
@@ -169,13 +177,13 @@ class Logger(object):
         self._log(self._lh.r, log_str, *args)
 
     def _adopt(self, other_logger):
-        if not is_instance(other_logger, Logger):
-            # instead, let's silently NOP for now
-            # this ineraction always happens within mra so it's less likely to be abused
-            # raise TypeError(f'{other_logger} is not a logger!')
-            return
+        # instead, let's silently NOP for now
+        # this ineraction always happens within mra so it's less likely to be abused
+        # raise TypeError(f'{other_logger} is not a logger!')
+        if is_instance(other_logger, Logger):
+            self._lh.adopt(other_logger._lh)
 
-        self._lh.adopt(other_logger._lh)
+        return other_logger
 
     def __str__(self):
         return "logger"

@@ -1,10 +1,22 @@
 import json
 import json5
 import collections
+import traceback
 from json import JSONDecodeError
 from pathlib import Path
 
 from operator import itemgetter, setitem
+
+class JobError(Exception):
+    def __init__(self, *args):
+        super().__init__(*args)
+        if len(args) < 2:
+            # yo dawg
+            raise ValueError(f"Too few arguments provided to Setup Error: {args}")
+
+        self.message = args[0]
+        self.triggering_exception = args[1]
+        self.traceback = traceback.format_exc()
 
 
 class UpdatableDict(dict):

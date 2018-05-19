@@ -37,8 +37,15 @@ class GeneratorArg(object):
             self.generator = generator
             self.args = args
             self.kwargs = kwargs
-            self. gens = gens
+            self.gens = gens
 
+        def __str__(self):
+            return '{}Args:({}{}{})'.format(
+                'Gen' if self.generator else '',
+                ', '.join([str(a) for a in self.args]),
+                ',' if self.kwargs else '',
+                ', '.join([f'{key} = {value}' for key, value in self.kwargs.items()])
+            )
 
     @classmethod
     def from_args_kwargs(cls, *args, **kwargs):
@@ -99,6 +106,7 @@ class Action(DurableState):
         super().__init__(0)
         self._info = GeneratorArg.from_args_kwargs(*args, **kwargs)
 
+
         self.registry = {}
         if not self.generator:
             self._create(*args, **kwargs)
@@ -111,6 +119,7 @@ class Action(DurableState):
         pass
 
     def __iter__(self):
+        self.log_spew(f'Generating ...')
         for args, kwargs in GeneratorArg.arg_loop(self._info):
             # will NOT contain generator classes
             yield self.__class__(*args, *kwargs)
@@ -169,8 +178,8 @@ class Action(DurableState):
             trace = traceback.format_exc()
             exception = e
 
-        # result = task.result()
         if asyncio.coroutines.iscoroutine(result):
+            self.log_warn('Segment {} returned a coroutine, raising exception', label)
             self.exception = TypeError(
                 f"Action returned coroutine object. Please add an await to your action's {label} function."
             )
@@ -180,7 +189,7 @@ class Action(DurableState):
 
         if is_instance(result, Logger):
             self._adopt(result)
-
+        self.log_system('Segment {} took {}', label, task.cputime)
         state_update = {label: {
             'duration': task.cputime if hasattr(task, 'cputime') else 0,
             'result': result,
@@ -188,7 +197,7 @@ class Action(DurableState):
             # Could save the exception in the state, but I don't think they can be pickled reliably
             # 'exception': exception
         }}
-        self.log_system(state_update)
+        self.log_spew(state_update)
         await self.update(state_update)
         if exception:
             self.exception = exception
@@ -204,7 +213,7 @@ class Action(DurableState):
         for seg in segments:
             await self.run_segment(seg[0], seg[1](task_handle, previous))
             if self.exception is not None:
-                self.log_error(f"Segment {seg[0]} raised an exception: {self.exception}")
+                self.log_warn(f"Segment {seg[0]} raised an exception: {self.exception}")
                 break
 
     async def before(self, task_handle, previous):
@@ -223,4 +232,4 @@ class Action(DurableState):
         pass
 
     def __str__(self):
-        return type(self).__name__
+        return f'{self.__class__.__name__}({self._info})'

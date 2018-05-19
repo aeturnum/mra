@@ -1,8 +1,5 @@
 import sys
-import os
 
-from mra.settings import Settings
-from mra.dynamic_module import DynamicModuleManager
 from mra.management import MRAManager
 
 # credit

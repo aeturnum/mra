@@ -10,7 +10,6 @@ from mra.settings import Settings, SettingsError
 
 # global registry
 Registry = {}
-# Registry_Lock = Lock()
 
 # default location for actions
 _DEFAULT_MODULE_ROOTS = (
@@ -45,7 +44,7 @@ _DRY_RUN_TIMEOUT = 5
 
 Prefixes = set()
 
-class DynamicModuleManager(object):
+class DynamicModuleManager(Logger):
     @staticmethod
     def _reset_registry():
         """
@@ -56,7 +55,7 @@ class DynamicModuleManager(object):
         Registry = {}
 
     @staticmethod
-    def _gather_file(path, test_process=False):
+    def _gather_file(path, test_process=False, logger=None):
         """
 
         :param str path: Path to python file
@@ -76,7 +75,8 @@ class DynamicModuleManager(object):
         try:
             spec.loader.exec_module(module)
         except SyntaxError:
-            print(f'File {path} contains a syntax log_error - skipping')
+            if logger:
+                logger.log_warn(f'File {path} contains a syntax log_error - skipping')
             # exit with a bad code if we're being called in a process
             if test_process:
                 exit(1)
@@ -90,11 +90,14 @@ class DynamicModuleManager(object):
                 # this will be called in a process first to ensure the process works
                 # Also check if this is a base class that won't ever been created
                 # Also check if we've banned this class
+                if logger:
+                    logger.log_system(f"Checking if we want to load {obj}...")
                 if not test_process and full_name not in _BANNED_CLASSES:
-                    obj.register()
+                    if logger:
+                        logger.log_system(f"Loading {obj}")
+                    obj.register(logger=logger)
 
-    @staticmethod
-    def gather(settings):
+    def gather(self, settings):
         """
         Gather all DynamicModules specified by settings
         :param settings:
@@ -107,7 +110,8 @@ class DynamicModuleManager(object):
         roots = []
         roots.extend(_DEFAULT_MODULE_ROOTS)
         roots.extend(settings.get('modules', []))
-        for action_directory in _DEFAULT_MODULE_ROOTS:
+        self.log_system("Begining to gather modules from directories: {}", roots)
+        for action_directory in roots:
             for dir_name, sub_dirs, file_list in os.walk(action_directory):
                 for file_name in file_list:
                     # open non-special python files
@@ -115,6 +119,8 @@ class DynamicModuleManager(object):
                         path = join(dir_name, file_name)
                         if path in _BANNED_FILES:
                             continue
+
+                        self.log_system("Checking candidate file {}", file_name)
                         process = multiprocessing.Process(
                             target=DynamicModuleManager._gather_file,
                             args=(path, True)  # dry run
@@ -126,17 +132,17 @@ class DynamicModuleManager(object):
                         if process.is_alive():
                             process.terminate()
                             process.join()
-                            print(f'File {path} did not terminate when loading module, probably blocks. Skipping.')
+                            self.log_warn(f'File {path} did not terminate when loading module, probably blocks. Skipping.')
                         else:
                             if process.exitcode == 0:
                                 # actually add the modules
                                 # print(f'loading: {path}')
-                                DynamicModuleManager._gather_file(path)
+                                self.log_system(f'Loading file {path} into dynamic modules.')
+                                DynamicModuleManager._gather_file(path, logger=self)
                             else:
                                 print(f'File {path} has a non-zero exit code, indicating problems. Skipping.')
 
-    @staticmethod
-    def LoadClass(path):
+    def LoadClass(self, path):
         global Registry
         global _DEFAULT_PREFIXES
         global Prefixes
@@ -144,16 +150,21 @@ class DynamicModuleManager(object):
         paths.extend([f'{p}.{path}' for p in Prefixes])
         # make sure the litteral name is tried first
         # todo: this could be faster, but it's setup, which can be slow as hell
+        self.log_system(f"Loading class from path '{path}'")
         paths.insert(0, path)
         for p in paths:
+            self.log_spew(f"Checking possible sub-path '{p}'...")
             if p in Registry:
+                self.log_system(f"Path '{p}' matches!")
                 return Registry[p]
 
         raise SettingsError(f'Path {path} not found in global registry!')
 
-    @staticmethod
-    def CreateClass(path, args):
-        return DynamicModuleManager.LoadClass(path)(*args)
+    def CreateClass(self, path, args):
+        return self.LoadClass(path)(*args)
+
+    def __str__(self):
+        return "DMM"
 
 class DynamicModule(Logger):
     PATH = "Global"
@@ -161,12 +172,12 @@ class DynamicModule(Logger):
     SETTINGS_KEYS = []
     SETTINGS = None
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, reporter=False):
+        super().__init__(reporter=reporter)
         self.settings = {}
 
     @staticmethod
-    def _global_register(path, module):
+    def _global_register(path, module, logger: Logger=None):
         global Registry
         global Prefixes
         if path in Registry:
@@ -176,19 +187,20 @@ class DynamicModule(Logger):
         Registry[path] = module
         if module.PREFIX is not None:
             Prefixes.add(module.PREFIX)
-        # print(f'Added {module} under path "{path}"')
+        if logger:
+            logger.log_debug(f'Added {module} under path "{path}"')
 
     # todo: maybe delete this?
     @staticmethod
-    def create(path, settings):
+    def create(path, settings, logger=None):
         global Registry
         obj = Registry[path]()
         obj.load_settings(settings)
         return obj
 
     @classmethod
-    def register(cls):
-        DynamicModule._global_register(cls.PATH, cls)
+    def register(cls, logger=None):
+        DynamicModule._global_register(cls.PATH, cls, logger=logger)
 
     @staticmethod
     def settings_file_update(settings):

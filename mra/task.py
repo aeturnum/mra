@@ -20,7 +20,7 @@ class Task(DurableState):
     PATH = "Task"
 
     def __init__(self, *actions, tracker: TaskProgressTracker = None, title=None):
-        super().__init__()
+        super().__init__(reporter=True)
         self.registry = {}
         self.actions = list(actions)
         self.completed = []
@@ -56,20 +56,25 @@ class Task(DurableState):
         self.meta.title = title
 
     async def setup(self):
+        self.log_spew("Running setup")
         await self.tracker.start_setup()
         # todo: create tooling around browsing and understanding history
         await self.update({
            'done': [],
            'actions': [a.durable_id for a in self.actions]
         })
+        self.log_spew("Setting up actions")
         for a in self.actions:
-            await a.setup(self.registry)
             # start managing the loggers of the actions
             self._adopt(a)
+            await a.setup(self.registry)
+
         self.result = None
         await self.tracker.finish_setup()
+        self.log_spew("Setup finished")
 
     async def cleanup(self):
+        self.log_spew("Running cleanup")
         await self.tracker.start_cleanup()
         for a in self.actions:
             await a.cleanup()
@@ -78,16 +83,17 @@ class Task(DurableState):
             await a.cleanup()
 
         await self.tracker.finish_cleanup()
+        self.log_spew("Cleanup finished")
 
     async def advance(self) -> None:
         # execute current action
-        # print(f'advance(): {self.current}')
+        self.log_spew(f'advance(): {self.current}')
         await self.tracker.start_action()
         await self.current.execute(TaskHandle(self), self.result)
-        # print(f'advance(): {self.current} executed')
+        self.log_spew(f'advance(): {self.current} executed')
         # get result
         self.result = self.current.result
-        # print(f'advance(): {self.current} -> {self.result}')
+        self.log_debug(f'advance(): {self.current} -> {self.result}')
         # update meta fields
         self.meta.last_action = self.current
         self.meta.exception = self.current.exception
@@ -95,14 +101,14 @@ class Task(DurableState):
 
         # make sure action does any cleanup
         await self.current.is_done()
-        # print(f'advance(): {self.current} done')
+        self.log_spew(f'advance(): {self.current} is done')
         # move to done categories
         self.completed.append(self.actions.pop(0))
         self['done'].append(self['actions'].pop(0))
 
         # check if we need to perform more actions
         if self.meta.exception is not None:
-            # print(f'advance(): raised exception')
+            self.log_system(f'advance(): exception was raised: {type(self.meta.exception)}')
             # all exceptions mean we're done
             self.meta.still_running = False
             # assume this means it's failed
@@ -115,6 +121,11 @@ class Task(DurableState):
                 # blank exception, its job is done
                 # todo: make this a special case for reporting
                 self.meta.exception = None
+                self.log_system(
+                    'advance(): exception was Early Exit. Completed: {}, result:',
+                    self.meta.completed,
+                    self.result
+                )
 
         await self.update(await self.read())
 
@@ -122,10 +133,11 @@ class Task(DurableState):
             # we're done
             self.meta.still_running = False
             self.meta.completed = True
+            self.log_system("Finished")
 
         await self.tracker.finish_action()
 
-    async def report(self, should_print) -> TaskMeta:
+    async def report(self) -> TaskMeta:
         self.meta.logs = self._lh.get_logs()
         self.meta.reports = self._lh.get_reports()
 
@@ -147,9 +159,12 @@ class Task(DurableState):
 
             await self.cleanup()
         except Exception as e:
-            traceback.print_exc()
+            self.meta.completed = False
+            # return would be impossible
+            self.result = None
+            self.meta.exception = e
         finally:
-            return await self.report(self.tracker.should_print)
+            return await self.report()
 
 
     def __str__(self):

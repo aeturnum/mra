@@ -60,10 +60,6 @@ class TaskProgressTracker(object):
     def submit_final_meta(self, meta:TaskMeta):
         self._parent.submit_report(self.index, meta.report())
 
-    @property
-    def should_print(self):
-        return self._parent.should_print
-
 class SetupTaskProgressTracker(TaskProgressTracker):
     def _create_bar(self):
         pass
@@ -82,7 +78,6 @@ class DisplayLayer(object):
         self.settings = settings
         self._tasks_tracked = []
         self._reports = []
-        self.should_print = True
 
     def task_tracker(self, setup_tracker=False):
         if setup_tracker:
@@ -97,6 +92,13 @@ class DisplayLayer(object):
             'index': index,
             'report': report
         })
+
+    def report_error(self, exception, logs):
+        print('error:{exception}\nlogs:{logs}'.format(
+            exception = exception,
+            logs = '\n\t'.join([log['log'] for log in logs])
+        ))
+
 
     @staticmethod
     def sort_index(report_dict):

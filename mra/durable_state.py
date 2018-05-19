@@ -109,8 +109,8 @@ class DurableState(DynamicModule):
 
     _state_table_create = 'CREATE TABLE IF NOT EXISTS states (id INTEGER PRIMARY KEY ASC, type INTEGER, state VARCHAR);'
 
-    def __init__(self, type_id: int=0, db_id: int=None):
-        super().__init__()
+    def __init__(self, type_id: int=0, db_id: int=None, reporter=False):
+        super().__init__(reporter=reporter)
         self._state = DBDict({'type': type_id, 'previous': None, 'next': None}, db_id)
         self._adopt(self._state)
         self._state_synced = False
